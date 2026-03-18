@@ -188,6 +188,164 @@ GROUP BY 1, 2, 3
 ORDER BY 1, 2, 3
 """
 
+# ── QUERIES — ABA 3: Qualidade & SLA (Points & Others) ───────────────────────
+
+QUERY_POINTS_SLA = f"""
+WITH base AS (
+  SELECT
+    DATE_TRUNC(DATE(ORDER_DATE), MONTH)                       AS month,
+    SIT_SITE_ID,
+    FLAG_DELIVERED                                            AS is_del,
+    COALESCE(ENTREGA_SAMEDAY, 0)                              AS sameday,
+    COALESCE(ENTREGA_UP_TO_NEXT_DAY, 0)                       AS next_day,
+    COALESCE(ENTREGA_UP_TO_3_DAYS, 0)                         AS up_3d,
+    COALESCE(ENTREGA_UP_TO_4_DAYS, 0)                         AS up_4d,
+    NULLIF(SLA, '')                                           AS sla,
+    NULLIF(SLA_FIRST_VISIT, '')                               AS sla_fv
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS_MLB`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+  UNION ALL
+  SELECT
+    DATE_TRUNC(DATE(ORDER_DATE), MONTH),
+    SIT_SITE_ID,
+    FLAG_DELIVERED,
+    COALESCE(ENTREGA_SAMEDAY, 0),
+    COALESCE(ENTREGA_UP_TO_NEXT_DAY, 0),
+    COALESCE(ENTREGA_UP_TO_3_DAYS, 0),
+    COALESCE(ENTREGA_UP_TO_4_DAYS, 0),
+    NULLIF(SLA, ''),
+    NULLIF(SLA_FIRST_VISIT, '')
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SIT_SITE_ID IN ({_SITES_GERAL})
+)
+SELECT
+  month,
+  SIT_SITE_ID                                                 AS site,
+  COUNTIF(is_del=1 AND sameday=1)                            AS speed_sd,
+  COUNTIF(is_del=1 AND next_day=1 AND sameday=0)             AS speed_nd,
+  COUNTIF(is_del=1 AND up_3d=1  AND next_day=0)              AS speed_2_3d,
+  COUNTIF(is_del=1 AND up_4d=1  AND up_3d=0)                 AS speed_4d,
+  COUNTIF(is_del=1 AND up_4d=0)                              AS speed_more4d,
+  COUNTIF(sla IS NOT NULL)                                   AS sla_total,
+  COUNTIF(sla = 'ON TIME')                                   AS sla_on_time,
+  COUNTIF(sla = 'EARLY')                                     AS sla_early,
+  COUNTIF(sla = 'DELAY')                                     AS sla_delay,
+  COUNTIF(sla_fv IS NOT NULL)                                AS sla_fv_total,
+  COUNTIF(sla_fv = 'ON TIME')                                AS sla_fv_on_time,
+  COUNTIF(sla_fv = 'EARLY')                                  AS sla_fv_early,
+  COUNTIF(sla_fv = 'DELAY')                                  AS sla_fv_delay
+FROM base
+GROUP BY 1, 2
+ORDER BY 1, 2
+"""
+
+QUERY_POINTS_MOTIVOS = f"""
+WITH base AS (
+  SELECT SIT_SITE_ID,
+    TRIM(UPPER(MOTIVO_NO_ENTREGA_NAME_1)) AS motivo
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS_MLB`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND MOTIVO_NO_ENTREGA_NAME_1 IS NOT NULL
+    AND MOTIVO_NO_ENTREGA_NAME_1 != ''
+  UNION ALL
+  SELECT SIT_SITE_ID,
+    TRIM(UPPER(MOTIVO_NO_ENTREGA_NAME_1))
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SIT_SITE_ID IN ({_SITES_GERAL})
+    AND MOTIVO_NO_ENTREGA_NAME_1 IS NOT NULL
+    AND MOTIVO_NO_ENTREGA_NAME_1 != ''
+)
+SELECT SIT_SITE_ID AS site, motivo, COUNT(*) AS cnt
+FROM base
+GROUP BY 1, 2
+ORDER BY 1, 3 DESC
+"""
+
+# ── QUERIES — ABA 4: Qualidade & SLA (Cards) ─────────────────────────────────
+
+QUERY_CARDS_SLA = f"""
+WITH base AS (
+  SELECT
+    DATE_TRUNC(SHP_DATE_CREATED_ID, MONTH)                    AS month,
+    SIT_SITE_ID,
+    IF(SHP_STATUS_ID='delivered',1,0)                         AS is_del,
+    COALESCE(ENTREGA_SAMEDAY, 0)                              AS sameday,
+    COALESCE(ENTREGA_UP_TO_NEXT_DAY, 0)                       AS next_day,
+    COALESCE(ENTREGA_UP_TO_3_DAYS, 0)                         AS up_3d,
+    COALESCE(ENTREGA_UP_TO_4_DAYS, 0)                         AS up_4d,
+    NULLIF(SLA, '')                                           AS sla,
+    NULLIF(SLA_FIRST_VISIT, '')                               AS sla_fv
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_PREPAID_MLB`
+  WHERE SHP_DATE_CREATED_ID >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+  UNION ALL
+  SELECT
+    DATE_TRUNC(SHP_DATE_CREATED_ID, MONTH),
+    SIT_SITE_ID,
+    IF(SHP_STATUS_ID='delivered',1,0),
+    COALESCE(ENTREGA_SAMEDAY, 0),
+    COALESCE(ENTREGA_UP_TO_NEXT_DAY, 0),
+    COALESCE(ENTREGA_UP_TO_3_DAYS, 0),
+    COALESCE(ENTREGA_UP_TO_4_DAYS, 0),
+    NULLIF(SLA, ''),
+    NULLIF(SLA_FIRST_VISIT, '')
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_PREPAID`
+  WHERE SHP_DATE_CREATED_ID >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SIT_SITE_ID IN ({_SITES_GERAL_CARDS})
+)
+SELECT
+  month,
+  SIT_SITE_ID                                                 AS site,
+  COUNTIF(is_del=1 AND sameday=1)                            AS speed_sd,
+  COUNTIF(is_del=1 AND next_day=1 AND sameday=0)             AS speed_nd,
+  COUNTIF(is_del=1 AND up_3d=1  AND next_day=0)              AS speed_2_3d,
+  COUNTIF(is_del=1 AND up_4d=1  AND up_3d=0)                 AS speed_4d,
+  COUNTIF(is_del=1 AND up_4d=0)                              AS speed_more4d,
+  COUNTIF(sla IS NOT NULL)                                   AS sla_total,
+  COUNTIF(sla = 'ON TIME')                                   AS sla_on_time,
+  COUNTIF(sla = 'EARLY')                                     AS sla_early,
+  COUNTIF(sla = 'DELAY')                                     AS sla_delay,
+  COUNTIF(sla_fv IS NOT NULL)                                AS sla_fv_total,
+  COUNTIF(sla_fv = 'ON TIME')                                AS sla_fv_on_time,
+  COUNTIF(sla_fv = 'EARLY')                                  AS sla_fv_early,
+  COUNTIF(sla_fv = 'DELAY')                                  AS sla_fv_delay
+FROM base
+GROUP BY 1, 2
+ORDER BY 1, 2
+"""
+
+QUERY_CARDS_MOTIVOS = f"""
+WITH base AS (
+  SELECT SIT_SITE_ID,
+    TRIM(UPPER(MOTIVO_NO_ENTREGA_NAME_1)) AS motivo
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_PREPAID_MLB`
+  WHERE SHP_DATE_CREATED_ID >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND MOTIVO_NO_ENTREGA_NAME_1 IS NOT NULL
+    AND MOTIVO_NO_ENTREGA_NAME_1 != ''
+  UNION ALL
+  SELECT SIT_SITE_ID,
+    TRIM(UPPER(MOTIVO_NO_ENTREGA_NAME_1))
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_PREPAID`
+  WHERE SHP_DATE_CREATED_ID >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SIT_SITE_ID IN ({_SITES_GERAL_CARDS})
+    AND MOTIVO_NO_ENTREGA_NAME_1 IS NOT NULL
+    AND MOTIVO_NO_ENTREGA_NAME_1 != ''
+)
+SELECT SIT_SITE_ID AS site, motivo, COUNT(*) AS cnt
+FROM base
+GROUP BY 1, 2
+ORDER BY 1, 3 DESC
+"""
+
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
 def run_query(client: bigquery.Client, sql: str, label: str) -> pd.DataFrame:
@@ -270,6 +428,79 @@ def build_tab_data(df_sales: pd.DataFrame, df_lt: pd.DataFrame) -> dict:
     }
 
 
+# ── MONTAGEM — Qualidade & SLA ────────────────────────────────────────────────
+
+def build_sla_data(df_sla: pd.DataFrame, df_motivos: pd.DataFrame) -> dict:
+    df_sla = df_sla.copy()
+    df_sla["month"] = df_sla["month"].astype(str)
+
+    all_months = sorted(df_sla["month"].unique())
+    all_sites  = sorted(df_sla["site"].unique())
+
+    def get(row, col):
+        v = row.get(col, 0)
+        return int(v) if pd.notna(v) else 0
+
+    by_site = {}
+    for site in all_sites:
+        s = df_sla[df_sla["site"] == site].set_index("month")
+
+        def mg(col, m):
+            if m not in s.index: return 0
+            return int(s.loc[m, col]) if pd.notna(s.loc[m, col]) else 0
+
+        speed, sla_on, sla_ea, sla_dl, fv_on, fv_dl = [], [], [], [], [], []
+        for m in all_months:
+            sd  = mg("speed_sd", m);  nd  = mg("speed_nd", m)
+            d23 = mg("speed_2_3d", m); d4 = mg("speed_4d", m); dm = mg("speed_more4d", m)
+            t  = mg("sla_total", m);   tf = mg("sla_fv_total", m)
+            speed.append({"sd":sd,"nd":nd,"d23":d23,"d4":d4,"dm":dm})
+            sla_on.append(round(mg("sla_on_time",m)/max(t,1)*100, 1))
+            sla_ea.append(round(mg("sla_early",m)  /max(t,1)*100, 1))
+            sla_dl.append(round(mg("sla_delay",m)  /max(t,1)*100, 1))
+            fv_on.append( round(mg("sla_fv_on_time",m)/max(tf,1)*100, 1))
+            fv_dl.append( round(mg("sla_fv_delay",m)  /max(tf,1)*100, 1))
+
+        motivos = []
+        if df_motivos is not None:
+            sub = df_motivos[df_motivos["site"] == site].sort_values("cnt", ascending=False).head(10)
+            motivos = [{"label": str(r["motivo"]), "cnt": int(r["cnt"])} for _, r in sub.iterrows()]
+
+        by_site[site] = {
+            "speed":            speed,
+            "sla_on_time_pct":  sla_on,
+            "sla_early_pct":    sla_ea,
+            "sla_delay_pct":    sla_dl,
+            "sla_fv_on_time_pct": fv_on,
+            "sla_fv_delay_pct":   fv_dl,
+            "motivos":          motivos,
+        }
+
+    total_t  = int(df_sla["sla_total"].sum())
+    total_on = int(df_sla["sla_on_time"].sum())
+    total_dl = int(df_sla["sla_delay"].sum())
+    total_fv = int(df_sla["sla_fv_total"].sum())
+    total_fv_on = int(df_sla["sla_fv_on_time"].sum())
+
+    top_motivo = "N/A"
+    if df_motivos is not None and len(df_motivos) > 0:
+        top = df_motivos.groupby("motivo")["cnt"].sum().sort_values(ascending=False)
+        if len(top) > 0:
+            top_motivo = str(top.index[0])[:35]
+
+    return {
+        "labels":  all_months,
+        "sites":   all_sites,
+        "by_site": by_site,
+        "kpis": {
+            "on_time_pct":    round(total_on / max(total_t, 1) * 100, 1),
+            "delay_pct":      round(total_dl / max(total_t, 1) * 100, 1),
+            "fv_on_time_pct": round(total_fv_on / max(total_fv, 1) * 100, 1),
+            "top_motivo":     top_motivo,
+        },
+    }
+
+
 # ── HTML TEMPLATE ─────────────────────────────────────────────────────────────
 
 HTML_TEMPLATE = """\
@@ -338,10 +569,10 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 </div>
 
 <div class="tabs">
-  <div class="tab active" onclick="showTab('points',this)">Visao Geral Points &amp; Others</div>
-  <div class="tab"        onclick="showTab('cards', this)">Visao Geral Cards</div>
-  <div class="tab"        onclick="showTab('tab3',  this)">Em breve</div>
-  <div class="tab"        onclick="showTab('tab4',  this)">Em breve</div>
+  <div class="tab active" onclick="showTab('points', this)">Visao Geral Points &amp; Others</div>
+  <div class="tab"        onclick="showTab('cards',  this)">Visao Geral Cards</div>
+  <div class="tab"        onclick="showTab('sla3',   this)">Qualidade &amp; SLA — Points</div>
+  <div class="tab"        onclick="showTab('sla4',   this)">Qualidade &amp; SLA — Cards</div>
 </div>
 
 <div class="content">
@@ -400,9 +631,47 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   <div class="picking-grid" id="c-c4"></div>
 </div>
 
-<!-- Placeholders -->
-<div id="pane-tab3" class="pane"><p style="padding:40px;color:var(--muted);text-align:center">Em construcao...</p></div>
-<div id="pane-tab4" class="pane"><p style="padding:40px;color:var(--muted);text-align:center">Em construcao...</p></div>
+<!-- ── ABA 3: Qualidade & SLA — Points ── -->
+<div id="pane-sla3" class="pane">
+  <div class="kpi-grid">
+    <div class="kpi c-green"> <div class="lbl">% No Prazo (SLA)</div>      <div class="val" id="s3-k-ontime"></div> <div class="sub">ON TIME sobre total</div></div>
+    <div class="kpi c-red">   <div class="lbl">% Com Atraso</div>           <div class="val" id="s3-k-delay"></div>  <div class="sub">DELAY sobre total</div></div>
+    <div class="kpi c-blue">  <div class="lbl">% No Prazo (1a Visita)</div> <div class="val" id="s3-k-fv"></div>    <div class="sub">SLA_FIRST_VISIT ON TIME</div></div>
+    <div class="kpi c-orange"><div class="lbl">Top Motivo Nao Entrega</div> <div class="val" style="font-size:1rem" id="s3-k-mot"></div><div class="sub">Mais frequente em 2026</div></div>
+  </div>
+  <div class="section-title">Grafico 1 — Mix de Velocidade de Entrega por Pais</div>
+  <div class="chart-grid" id="s3-speed"></div>
+  <div class="section-title">Grafico 2 — Performance de SLA por Mes e Pais</div>
+  <div class="chart-grid">
+    <div class="chart-card"><h3>% No Prazo (ON TIME) por Pais</h3><canvas id="s3-sla-ontime"></canvas></div>
+    <div class="chart-card"><h3>% Atraso (DELAY) por Pais</h3>    <canvas id="s3-sla-delay"></canvas></div>
+  </div>
+  <div class="section-title">Grafico 3 — Principais Motivos de Nao Entrega (por Pais)</div>
+  <div class="chart-grid" id="s3-motivos"></div>
+  <div class="section-title">Grafico 4 — SLA Entrega vs 1a Visita (por Pais)</div>
+  <div class="chart-grid" id="s3-fv"></div>
+</div>
+
+<!-- ── ABA 4: Qualidade & SLA — Cards ── -->
+<div id="pane-sla4" class="pane">
+  <div class="kpi-grid">
+    <div class="kpi c-green"> <div class="lbl">% No Prazo (SLA)</div>      <div class="val" id="s4-k-ontime"></div> <div class="sub">ON TIME sobre total</div></div>
+    <div class="kpi c-red">   <div class="lbl">% Com Atraso</div>           <div class="val" id="s4-k-delay"></div>  <div class="sub">DELAY sobre total</div></div>
+    <div class="kpi c-blue">  <div class="lbl">% No Prazo (1a Visita)</div> <div class="val" id="s4-k-fv"></div>    <div class="sub">SLA_FIRST_VISIT ON TIME</div></div>
+    <div class="kpi c-orange"><div class="lbl">Top Motivo Nao Entrega</div> <div class="val" style="font-size:1rem" id="s4-k-mot"></div><div class="sub">Mais frequente em 2026</div></div>
+  </div>
+  <div class="section-title">Grafico 1 — Mix de Velocidade de Entrega por Pais</div>
+  <div class="chart-grid" id="s4-speed"></div>
+  <div class="section-title">Grafico 2 — Performance de SLA por Mes e Pais</div>
+  <div class="chart-grid">
+    <div class="chart-card"><h3>% No Prazo (ON TIME) por Pais</h3><canvas id="s4-sla-ontime"></canvas></div>
+    <div class="chart-card"><h3>% Atraso (DELAY) por Pais</h3>    <canvas id="s4-sla-delay"></canvas></div>
+  </div>
+  <div class="section-title">Grafico 3 — Principais Motivos de Nao Entrega (por Pais)</div>
+  <div class="chart-grid" id="s4-motivos"></div>
+  <div class="section-title">Grafico 4 — SLA Entrega vs 1a Visita (por Pais)</div>
+  <div class="chart-grid" id="s4-fv"></div>
+</div>
 
 </div><!-- /content -->
 <div class="footer">Fonte: meli-bi-data · SBOX_OPER_MP · a partir de {date_from} · <span id="footer-dt"></span></div>
@@ -497,6 +766,85 @@ function setKpis(prefix, kpis){{
   document.getElementById(prefix+"-k-sell") .textContent = kpis.total_sellers;
 }}
 
+// ── SLA helpers ───────────────────────────────────────────────────────────────
+function mkCard(container, title){{
+  const d = document.createElement("div");
+  d.className = "chart-card";
+  d.innerHTML = `<h3>${{title}}</h3><canvas></canvas>`;
+  container.appendChild(d);
+  return d;
+}}
+function barChartEl(el, labels, datasets, stacked=false){{
+  return new Chart(el,{{
+    type:"bar", data:{{labels,datasets}},
+    options:{{responsive:true,interaction:{{mode:"index",intersect:false}},
+      plugins:{{legend:{{position:"top"}}}},
+      scales:{{x:{{stacked}},y:{{stacked,beginAtZero:true}}}}
+    }}
+  }});
+}}
+function hbarChartEl(el, labels, datasets){{
+  return new Chart(el,{{
+    type:"bar", data:{{labels,datasets}},
+    options:{{responsive:true,indexAxis:"y",
+      plugins:{{legend:{{display:false}}}},
+      scales:{{x:{{beginAtZero:true}}}}
+    }}
+  }});
+}}
+
+const SPEED_LABELS = ["Mesmo Dia","Dia Seguinte","2-3 Dias","4 Dias","+4 Dias"];
+const SPEED_COLS   = ["sd","nd","d23","d4","dm"];
+const SPEED_COLORS = [COLORS[2],COLORS[0],COLORS[1],COLORS[3],COLORS[4]];
+
+function renderSlaTab(P, D){{
+  const ml = D.labels, sites = D.sites, bs = D.by_site;
+
+  // KPIs
+  document.getElementById(P+"-k-ontime").textContent = D.kpis.on_time_pct+"%";
+  document.getElementById(P+"-k-delay") .textContent = D.kpis.delay_pct+"%";
+  document.getElementById(P+"-k-fv")    .textContent = D.kpis.fv_on_time_pct+"%";
+  document.getElementById(P+"-k-mot")   .textContent = D.kpis.top_motivo;
+
+  // Grafico 1 — speed mix (stacked bar por pais)
+  const cSpd = document.getElementById(P+"-speed");
+  sites.forEach(site => {{
+    const card = mkCard(cSpd, "Mix Velocidade — "+site);
+    const datasets = SPEED_COLS.map((k,i) =>
+      mkBar(SPEED_LABELS[i], bs[site].speed.map(s=>s[k]), SPEED_COLORS[i]));
+    barChartEl(card.querySelector("canvas"), ml, datasets, true);
+  }});
+
+  // Grafico 2 — SLA % linhas
+  lineChart(P+"-sla-ontime", ml,
+    sites.map(s => mkLine(s, bs[s].sla_on_time_pct, sc(s), true)), "%");
+  lineChart(P+"-sla-delay",  ml,
+    sites.map(s => mkLine(s, bs[s].sla_delay_pct,   sc(s))), "%");
+
+  // Grafico 3 — motivos horizontal bar por pais
+  const cMot = document.getElementById(P+"-motivos");
+  sites.forEach(site => {{
+    const mot = bs[site].motivos;
+    if(!mot.length) return;
+    const card = mkCard(cMot, "Motivos Nao Entrega — "+site);
+    card.querySelector("canvas").style.maxHeight = "300px";
+    hbarChartEl(card.querySelector("canvas"),
+      mot.map(m=>m.label).reverse(),
+      [mkBar("Ocorrencias", mot.map(m=>m.cnt).reverse(), sc(site))]);
+  }});
+
+  // Grafico 4 — SLA vs 1a visita por pais
+  const cFv = document.getElementById(P+"-fv");
+  sites.forEach(site => {{
+    const card = mkCard(cFv, "SLA Entrega vs 1a Visita — "+site);
+    lineChartEl(card.querySelector("canvas"), ml, [
+      mkLine("No Prazo — Entrega",  bs[site].sla_on_time_pct,    COLORS[0], true),
+      mkLine("No Prazo — 1a Visita",bs[site].sla_fv_on_time_pct, COLORS[2]),
+      mkLine("Atraso — Entrega",    bs[site].sla_delay_pct,      COLORS[4]),
+    ], "%");
+  }});
+}}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.getElementById("updated")  .textContent = D.updated_at;
 document.getElementById("footer-dt").textContent = D.updated_at;
@@ -505,6 +853,8 @@ setKpis("p", D.points.kpis);
 setKpis("c", D.cards.kpis);
 renderTab("p", D.points);
 renderTab("c", D.cards);
+renderSlaTab("s3", D.sla_points);
+renderSlaTab("s4", D.sla_cards);
 </script>
 </body>
 </html>
@@ -513,11 +863,13 @@ renderTab("c", D.cards);
 
 # ── GERAR HTML ────────────────────────────────────────────────────────────────
 
-def generate_html(points_data: dict, cards_data: dict, title: str, output: str = "index.html"):
+def generate_html(points_data, cards_data, sla_points, sla_cards, title, output="index.html"):
     payload = {
         "updated_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "points":     points_data,
         "cards":      cards_data,
+        "sla_points": sla_points,
+        "sla_cards":  sla_cards,
     }
     data_json = json.dumps(payload, ensure_ascii=False, default=str)
     html = HTML_TEMPLATE.format(title=title, data_json=data_json, date_from=DATE_FROM)
@@ -532,23 +884,33 @@ def main():
     print(f"Conectando ao BigQuery ({PROJECT})...")
     client = bigquery.Client(project=PROJECT)
 
-    print("\n[ABA 1] Points & Others...")
+    print("\n[ABA 1] Points & Others — visao geral...")
     df_p_sales = run_query(client, QUERY_POINTS_SALES, "points-vendas")
     df_p_lt    = run_query(client, QUERY_POINTS_LT,    "points-leadtime")
 
-    print("\n[ABA 2] Cards...")
+    print("\n[ABA 2] Cards — visao geral...")
     df_c_sales = run_query(client, QUERY_CARDS_SALES,  "cards-vendas")
     df_c_lt    = run_query(client, QUERY_CARDS_LT,     "cards-leadtime")
+
+    print("\n[ABA 3] Points — qualidade & SLA...")
+    df_p_sla    = run_query(client, QUERY_POINTS_SLA,    "points-sla")
+    df_p_motivos= run_query(client, QUERY_POINTS_MOTIVOS,"points-motivos")
+
+    print("\n[ABA 4] Cards — qualidade & SLA...")
+    df_c_sla    = run_query(client, QUERY_CARDS_SLA,     "cards-sla")
+    df_c_motivos= run_query(client, QUERY_CARDS_MOTIVOS, "cards-motivos")
 
     print("\nMontando dados...")
     points_data = build_tab_data(df_p_sales, df_p_lt)
     cards_data  = build_tab_data(df_c_sales, df_c_lt)
+    sla_points  = build_sla_data(df_p_sla, df_p_motivos)
+    sla_cards   = build_sla_data(df_c_sla, df_c_motivos)
 
     print("Gerando HTML...")
-    generate_html(points_data, cards_data, DASHBOARD_TITLE)
+    generate_html(points_data, cards_data, sla_points, sla_cards, DASHBOARD_TITLE)
 
     print("\nPara publicar:")
-    print("  git add index.html && git commit -m 'aba cards' && git push")
+    print("  git add index.html && git commit -m 'abas 3 e 4 SLA' && git push")
 
 
 if __name__ == "__main__":
