@@ -148,36 +148,40 @@ ORDER BY 1, 2
 QUERY_CARDS_LT = f"""
 WITH base AS (
   SELECT
-    DATE_TRUNC(SHP_DATE_CREATED_ID, MONTH)                    AS month,
+    DATE_TRUNC(SHP_DATE_CREATED_ID, MONTH)                              AS month,
     SIT_SITE_ID,
-    COALESCE(NULLIF(SHP_PICKING_TYPE_ID, ''), 'unknown')      AS picking_type,
-    ROUND(LEAD_TIME_MINS_HABILES / 480.0, 2)                  AS lead_time_days
+    COALESCE(NULLIF(OP_LOGISTICO, ''), 'unknown')                       AS picking_type,
+    DATE_DIFF(DATE(SHP_DATETIME_DELIVERED_ID), SHP_DATE_CREATED_ID, DAY) AS lead_time_days
   FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_PREPAID_MLB`
   WHERE SHP_DATE_CREATED_ID >= '{DATE_FROM}'
     AND SHP_SENDER_ID IN ({_CUSTS})
     AND SHP_STATUS_ID = 'delivered'
-    AND LEAD_TIME_MINS_HABILES > 0
-    AND LEAD_TIME_MINS_HABILES < 14400
+    AND SHP_DATETIME_DELIVERED_ID IS NOT NULL
+    AND DATE_DIFF(DATE(SHP_DATETIME_DELIVERED_ID), SHP_DATE_CREATED_ID, DAY) > 0
+    AND DATE_DIFF(DATE(SHP_DATETIME_DELIVERED_ID), SHP_DATE_CREATED_ID, DAY) < 60
+
   UNION ALL
+
   SELECT
     DATE_TRUNC(SHP_DATE_CREATED_ID, MONTH),
     SIT_SITE_ID,
-    COALESCE(NULLIF(SHP_PICKING_TYPE_ID, ''), 'unknown'),
-    ROUND(LEAD_TIME_MINS_HABILES / 480.0, 2)
+    COALESCE(NULLIF(OP_LOGISTICO, ''), 'unknown'),
+    DATE_DIFF(DATE(SHP_DATETIME_DELIVERED_ID), SHP_DATE_CREATED_ID, DAY)
   FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_PREPAID`
   WHERE SHP_DATE_CREATED_ID >= '{DATE_FROM}'
     AND SHP_SENDER_ID IN ({_CUSTS})
     AND SIT_SITE_ID IN ({_SITES_GERAL})
     AND SHP_STATUS_ID = 'delivered'
-    AND LEAD_TIME_MINS_HABILES > 0
-    AND LEAD_TIME_MINS_HABILES < 14400
+    AND SHP_DATETIME_DELIVERED_ID IS NOT NULL
+    AND DATE_DIFF(DATE(SHP_DATETIME_DELIVERED_ID), SHP_DATE_CREATED_ID, DAY) > 0
+    AND DATE_DIFF(DATE(SHP_DATETIME_DELIVERED_ID), SHP_DATE_CREATED_ID, DAY) < 60
 )
 SELECT
   month,
-  SIT_SITE_ID                                                 AS site,
+  SIT_SITE_ID                                                           AS site,
   picking_type,
-  ROUND(AVG(lead_time_days), 2)                               AS avg_lead_time,
-  COUNT(*)                                                    AS cnt
+  ROUND(AVG(lead_time_days), 2)                                         AS avg_lead_time,
+  COUNT(*)                                                              AS cnt
 FROM base
 GROUP BY 1, 2, 3
 ORDER BY 1, 2, 3
