@@ -84,7 +84,7 @@ body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 </div>
 
 <div class="tabs">
-  <div class="tab active" onclick="showTab('overview',this)">Visao Geral</div>
+  <div class="tab active" onclick="showTab('overview',this)">Visao Geral Points & Others</div>
   <div class="tab"        onclick="showTab('tab2',    this)">Vendas (em breve)</div>
   <div class="tab"        onclick="showTab('tab3',    this)">Lead Time (em breve)</div>
   <div class="tab"        onclick="showTab('tab4',    this)">Metodos (em breve)</div>
@@ -184,7 +184,7 @@ body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 </div>
 
 <script>
-const D = {"updated_at": "18/03/2026 18:10", "labels": ["2026-01-01", "2026-02-01", "2026-03-01"], "sites": ["MLA", "MLB", "MLC", "MLM"], "by_site": {"MLA": {"sold": [96629, 102668, 61117], "delivered": [93301, 98258, 54360], "delivery_rate": [96.6, 95.7, 88.9], "lead_time": [2.2, 2.29, 1.93], "lt_by_picking": {"cross_docking": [2.07, 2.1, 1.78], "drop_off": [2.73, 3.16, 2.53], "fulfillment": [1.76, 1.81, 1.53]}}, "MLB": {"sold": [1352030, 1349843, 804847], "delivered": [1324766, 1315110, 635304], "delivery_rate": [98.0, 97.4, 78.9], "lead_time": [3.04, 2.91, 2.86], "lt_by_picking": {"cross_docking": [3.03, 2.91, 2.91], "drop_off": [13.5, 11.78, 5.77], "fulfillment": [2.19, 1.85, 1.78]}}, "MLC": {"sold": [35832, 34838, 23644], "delivered": [35378, 34488, 21131], "delivery_rate": [98.7, 99.0, 89.4], "lead_time": [1.51, 1.49, 1.41], "lt_by_picking": {"cross_docking": [1.5, 1.49, 1.41], "fulfillment": [1.57, 1.41, 1.37], "xd_drop_off": [2.23, null, null]}}, "MLM": {"sold": [149537, 145410, 92183], "delivered": [146339, 142962, 77765], "delivery_rate": [97.9, 98.3, 84.4], "lead_time": [2.03, 2.04, 1.95], "lt_by_picking": {"cross_docking": [2.15, 2.14, 2.08], "fulfillment": [1.5, 1.5, 1.38]}}}, "kpis": {"total_sold": 4248578, "total_delivered": 3979162, "delivery_rate": 93.7, "avg_lead_time": 2.84, "active_sites": 4, "total_sellers": 39}};
+const D = {"updated_at": "18/03/2026 18:31", "labels": ["2026-01-01", "2026-02-01", "2026-03-01"], "sites": ["MLA", "MLB", "MLC", "MLM"], "by_site": {"MLA": {"sold": [96629, 102668, 62172], "delivered": [93301, 98260, 56773], "delivery_rate": [96.6, 95.7, 91.3], "lead_time": [2.2, 2.29, 1.94], "lt_by_picking": {"cross_docking": [2.07, 2.1, 1.79], "drop_off": [2.73, 3.17, 2.54], "fulfillment": [1.76, 1.81, 1.53]}}, "MLB": {"sold": [1352030, 1349843, 804847], "delivered": [1324766, 1315110, 635304], "delivery_rate": [98.0, 97.4, 78.9], "lead_time": [3.04, 2.91, 2.86], "lt_by_picking": {"cross_docking": [3.03, 2.91, 2.91], "drop_off": [13.5, 11.78, 5.77], "fulfillment": [2.19, 1.85, 1.78]}}, "MLC": {"sold": [35832, 34838, 24271], "delivered": [35378, 34488, 22551], "delivery_rate": [98.7, 99.0, 92.9], "lead_time": [1.51, 1.49, 1.41], "lt_by_picking": {"cross_docking": [1.5, 1.49, 1.41], "fulfillment": [1.57, 1.41, 1.36], "xd_drop_off": [2.23, null, null]}}, "MLM": {"sold": [149537, 145410, 92867], "delivered": [146339, 142962, 79664], "delivery_rate": [97.9, 98.3, 85.8], "lead_time": [2.03, 2.04, 1.96], "lt_by_picking": {"cross_docking": [2.15, 2.14, 2.08], "fulfillment": [1.5, 1.5, 1.39]}}}, "kpis": {"total_sold": 4250944, "total_delivered": 3984896, "delivery_rate": 93.7, "avg_lead_time": 2.84, "active_sites": 4, "total_sellers": 39}};
 
 // ── Utilitarios ───────────────────────────────────────────────────────────────
 function fmtN(n){

@@ -297,7 +297,7 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 </div>
 
 <div class="tabs">
-  <div class="tab active" onclick="showTab('overview',this)">Visao Geral</div>
+  <div class="tab active" onclick="showTab('overview',this)">Visao Geral Points & Others</div>
   <div class="tab"        onclick="showTab('tab2',    this)">Vendas (em breve)</div>
   <div class="tab"        onclick="showTab('tab3',    this)">Lead Time (em breve)</div>
   <div class="tab"        onclick="showTab('tab4',    this)">Metodos (em breve)</div>
