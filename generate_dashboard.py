@@ -1,7 +1,7 @@
 """
 generate_dashboard.py
 ---------------------
-Consulta BigQuery e gera um dashboard HTML estático pronto para GitHub Pages.
+Consulta BigQuery e gera um dashboard HTML estatico pronto para GitHub Pages.
 
 USO:
     .venv/Scripts/python generate_dashboard.py
@@ -36,81 +36,86 @@ MAIN_CUSTS = [
 ]
 _CUSTS = ", ".join(str(c) for c in MAIN_CUSTS)
 
+# Sites: MLB usa tabela separada, demais usam a tabela geral
+SITES_GERAL = ("'MLA'", "'MLC'", "'MLM'", "'MLU'")
+
 # ── QUERIES ───────────────────────────────────────────────────────────────────
 
-# 1. Vendas e entregas mensais por site
-QUERY_MONTHLY_OPS = f"""
-SELECT
-    DATE_TRUNC(SHP_DATE_CREATED_ID, MONTH)              AS month,
-    SIT_SITE_ID                                          AS site,
-    COUNT(*)                                             AS total_shipments,
-    SUM(SHP_QUANTITY)                                    AS total_items,
-    COUNTIF(SHP_STATUS_ID = 'delivered')                 AS delivered_shipments,
-    SUM(CASE WHEN SHP_STATUS_ID = 'delivered'
-             THEN SHP_QUANTITY ELSE 0 END)               AS delivered_items,
-    COUNTIF(SHP_STATUS_ID = 'cancelled')                 AS cancelled_shipments
-FROM `meli-bi-data.WHOWNER.BT_SHP_SHIPMENTS`
-WHERE
-    SHP_DATE_CREATED_ID >= '{DATE_FROM}'
+# 1. Vendidos e entregues por mes e pais
+QUERY_SALES = f"""
+WITH base AS (
+  SELECT
+    DATE_TRUNC(DATE(ORDER_DATE), MONTH)              AS month,
+    SIT_SITE_ID,
+    FLAG_DELIVERED,
+    COALESCE(Q_DEVICES, 1)                           AS items
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS_MLB`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
     AND SHP_SENDER_ID IN ({_CUSTS})
+
+  UNION ALL
+
+  SELECT
+    DATE_TRUNC(DATE(ORDER_DATE), MONTH),
+    SIT_SITE_ID,
+    FLAG_DELIVERED,
+    COALESCE(Q_DEVICES, 1)
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SIT_SITE_ID IN ({", ".join(SITES_GERAL)})
+)
+SELECT
+  month,
+  SIT_SITE_ID                                        AS site,
+  COUNT(*)                                           AS total_orders,
+  SUM(items)                                         AS total_items,
+  COUNTIF(FLAG_DELIVERED = 1)                        AS delivered_orders,
+  SUM(CASE WHEN FLAG_DELIVERED = 1 THEN items ELSE 0 END) AS delivered_items
+FROM base
 GROUP BY 1, 2
 ORDER BY 1, 2
 """
 
-# 2. Lead time medio mensal por site e tipo logistico
+# 2. Lead time por mes, pais e picking type
 QUERY_LEADTIME = f"""
+WITH base AS (
+  SELECT
+    DATE_TRUNC(DATE(ORDER_DATE), MONTH)              AS month,
+    SIT_SITE_ID,
+    COALESCE(NULLIF(SHP_PICKING_TYPE_ID,''), 'unknown') AS picking_type,
+    LEAD_TIME_DIAS_HABILES
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS_MLB`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND FLAG_DELIVERED = 1
+    AND LEAD_TIME_DIAS_HABILES > 0
+    AND LEAD_TIME_DIAS_HABILES < 30
+
+  UNION ALL
+
+  SELECT
+    DATE_TRUNC(DATE(ORDER_DATE), MONTH),
+    SIT_SITE_ID,
+    COALESCE(NULLIF(SHP_PICKING_TYPE_ID,''), 'unknown'),
+    LEAD_TIME_DIAS_HABILES
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SIT_SITE_ID IN ({", ".join(SITES_GERAL)})
+    AND FLAG_DELIVERED = 1
+    AND LEAD_TIME_DIAS_HABILES > 0
+    AND LEAD_TIME_DIAS_HABILES < 30
+)
 SELECT
-    DATE_TRUNC(s.SHP_DATE_CREATED_ID, MONTH)             AS month,
-    s.SIT_SITE_ID                                         AS site,
-    COALESCE(t.SHP_LOGISTIC_TYPE, 'unknown')              AS logistic_type,
-    ROUND(AVG(t.SHP_LEAD_TIME_DAYS), 2)                   AS avg_lead_time_days,
-    ROUND(AVG(t.SHP_HANDLING_TIME_DAYS), 2)               AS avg_handling_days,
-    ROUND(AVG(t.SHP_SHIPPING_TIME_DAYS), 2)               AS avg_shipping_days,
-    COUNT(*)                                              AS cnt
-FROM `meli-bi-data.WHOWNER.BT_SHP_SHIPMENTS` s
-JOIN `meli-bi-data.WHOWNER.LK_SHP_SHIPMENTS_TIMES` t
-    ON s.SHP_SHIPMENT_ID = t.SHP_SHIPMENT_ID
-WHERE
-    s.SHP_DATE_CREATED_ID >= '{DATE_FROM}'
-    AND s.SHP_SENDER_ID IN ({_CUSTS})
-    AND s.SHP_STATUS_ID = 'delivered'
-    AND t.SHP_LEAD_TIME_DAYS > 0
-    AND t.SHP_LEAD_TIME_DAYS < 60
+  month,
+  SIT_SITE_ID                                        AS site,
+  picking_type,
+  ROUND(AVG(LEAD_TIME_DIAS_HABILES), 2)              AS avg_lead_time,
+  COUNT(*)                                           AS cnt
+FROM base
 GROUP BY 1, 2, 3
 ORDER BY 1, 2, 3
-"""
-
-# 3. Mix de metodo de envio por mes
-QUERY_SHIPPING_METHOD = f"""
-SELECT
-    DATE_TRUNC(SHP_DATE_CREATED_ID, MONTH)               AS month,
-    COALESCE(SHP_SHIPPING_MODE_ID, 'unknown')             AS shipping_mode,
-    COUNT(*)                                              AS shipments,
-    SUM(SHP_QUANTITY)                                     AS items
-FROM `meli-bi-data.WHOWNER.BT_SHP_SHIPMENTS`
-WHERE
-    SHP_DATE_CREATED_ID >= '{DATE_FROM}'
-    AND SHP_SENDER_ID IN ({_CUSTS})
-GROUP BY 1, 2
-ORDER BY 1, 2
-"""
-
-# 4. FBM semanal por modal (ultimas 12 semanas)
-QUERY_FBM_WEEKLY = f"""
-SELECT
-    DATE_TRUNC(CALENDAR_DATE, WEEK(MONDAY))               AS week,
-    SUM(SI_FBM)                                           AS fbm_units,
-    SUM(SI_ME2)                                           AS me2_units,
-    SUM(SI_FLEX)                                          AS flex_units,
-    SUM(SI_XD)                                            AS xd_units,
-    SUM(GMV_FBM_USD)                                      AS gmv_fbm_usd,
-    SUM(GMV_ME2_USD)                                      AS gmv_me2_usd
-FROM `meli-bi-data.WHOWNER.DM_SHP_FBM_GROWTH_DETAIL`
-WHERE
-    CALENDAR_DATE >= '{DATE_FROM}'
-    AND CUS_CUST_ID IN ({_CUSTS})
-GROUP BY 1
-ORDER BY 1
 """
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -118,157 +123,87 @@ ORDER BY 1
 def run_query(client: bigquery.Client, sql: str, label: str) -> pd.DataFrame:
     print(f"  [{label}] executando...")
     df = client.query(sql).to_dataframe()
-    print(f"  [{label}] {len(df)} linhas retornadas")
+    # converter colunas BIGNUMERIC/NUMERIC para float
+    for col in df.select_dtypes(include=["object"]).columns:
+        try:
+            df[col] = pd.to_numeric(df[col])
+        except (ValueError, TypeError):
+            pass
+    print(f"  [{label}] {len(df)} linhas")
     return df
 
 
-def to_float(series: pd.Series) -> pd.Series:
-    return series.fillna(0).astype(float)
-
-
-def month_labels(df: pd.DataFrame, col: str = "month") -> list:
-    return df[col].drop_duplicates().sort_values().astype(str).tolist()
-
-
-def pivot_by(df: pd.DataFrame, dim: str, value_col: str,
-             all_months: list) -> dict:
-    """Retorna dict {dim_value: [valores por mes]}."""
-    result = {}
-    for val in sorted(df[dim].dropna().unique()):
-        sub = df[df[dim] == val][["month", value_col]].copy()
-        sub["month"] = sub["month"].astype(str)
-        sub = sub.groupby("month")[value_col].sum().reindex(all_months, fill_value=0)
-        result[str(val)] = [round(float(x), 2) for x in sub.values]
-    return result
+def wavg(df, val_col, weight_col):
+    """Media ponderada."""
+    total = df[weight_col].sum()
+    if total == 0:
+        return None
+    return round(float((df[val_col] * df[weight_col]).sum() / total), 2)
 
 
 # ── MONTAGEM DO OBJETO DE DADOS ───────────────────────────────────────────────
 
-def build_data(df_ops, df_lt, df_mode, df_fbm) -> dict:
+def build_overview(df_sales: pd.DataFrame, df_lt: pd.DataFrame) -> dict:
 
-    # ── Mensais globais (todos os sites somados) ──
-    ops_global = (
-        df_ops.groupby("month")[
-            ["total_shipments", "total_items", "delivered_shipments",
-             "delivered_items", "cancelled_shipments"]
-        ].sum().reset_index().sort_values("month")
-    )
-    all_months = ops_global["month"].astype(str).tolist()
+    df_sales["month"] = df_sales["month"].astype(str)
+    df_lt["month"]    = df_lt["month"].astype(str)
 
-    total_items     = to_float(ops_global["total_items"]).astype(int).tolist()
-    delivered_items = to_float(ops_global["delivered_items"]).astype(int).tolist()
-    cancelled_ship  = to_float(ops_global["cancelled_shipments"]).astype(int).tolist()
-    delivery_rate   = [
-        round(d / t * 100, 1) if t > 0 else 0
-        for d, t in zip(delivered_items, total_items)
-    ]
+    all_months = sorted(df_sales["month"].unique())
+    all_sites  = sorted(df_sales["site"].unique())
 
-    # ── Por site ──
-    df_ops["month"] = df_ops["month"].astype(str)
-    items_by_site     = pivot_by(df_ops, "site", "total_items", all_months)
-    delivered_by_site = pivot_by(df_ops, "site", "delivered_items", all_months)
+    by_site = {}
+    for site in all_sites:
+        s = df_sales[df_sales["site"] == site].set_index("month")
 
-    # ── Lead time por tipo logistico (todos os sites) ──
-    lt_global = (
-        df_lt.groupby(["month", "logistic_type"])
-        .apply(lambda g: pd.Series({
-            "avg_lt": (g["avg_lead_time_days"] * g["cnt"]).sum() / g["cnt"].sum(),
-            "avg_ht": (g["avg_handling_days"]  * g["cnt"]).sum() / g["cnt"].sum(),
-            "avg_st": (g["avg_shipping_days"]  * g["cnt"]).sum() / g["cnt"].sum(),
-        }), include_groups=False)
-        .reset_index()
-    )
-    df_lt["month"] = df_lt["month"].astype(str)
-    lt_global["month"] = lt_global["month"].astype(str)
-
-    lt_by_logtype = {}
-    for lt_type in sorted(lt_global["logistic_type"].unique()):
-        sub = lt_global[lt_global["logistic_type"] == lt_type][["month","avg_lt"]]
-        sub = sub.set_index("month")["avg_lt"].reindex(all_months, fill_value=None)
-        lt_by_logtype[lt_type] = [
-            round(float(v), 2) if v is not None and not pd.isna(v) else None
-            for v in sub.values
+        sold      = [int(s.loc[m, "total_items"])     if m in s.index else 0 for m in all_months]
+        delivered = [int(s.loc[m, "delivered_items"])  if m in s.index else 0 for m in all_months]
+        rate      = [
+            round(d / t * 100, 1) if t > 0 else 0
+            for d, t in zip(delivered, sold)
         ]
 
-    # Lead time medio geral por mes
-    lt_overall = (
-        df_lt.groupby("month")
-        .apply(lambda g: round(
-            float((g["avg_lead_time_days"].astype(float) * g["cnt"].astype(float)).sum()
-                  / g["cnt"].astype(float).sum()), 2
-        ), include_groups=False)
-        .reset_index(name="avg_lt")
-    )
-    lt_overall["month"] = lt_overall["month"].astype(str)
-    lt_avg_global = [
-        lt_overall.set_index("month")["avg_lt"].get(m, None) for m in all_months
-    ]
+        # Lead time por mes (todos os picking types agregados)
+        lt_s = df_lt[df_lt["site"] == site]
+        lt_avg = []
+        for m in all_months:
+            sub = lt_s[lt_s["month"] == m]
+            lt_avg.append(wavg(sub, "avg_lead_time", "cnt") if len(sub) > 0 else None)
 
-    # ── Lead time por site ──
-    lt_by_site = {}
-    for site in sorted(df_lt["site"].unique()):
-        sub = (
-            df_lt[df_lt["site"] == site]
-            .groupby("month")
-            .apply(lambda g: round(
-                float((g["avg_lead_time_days"].astype(float) * g["cnt"].astype(float)).sum()
-                      / g["cnt"].astype(float).sum()), 2
-            ), include_groups=False)
-            .reset_index(name="avg_lt")
-        )
-        sub["month"] = sub["month"].astype(str)
-        series = [sub.set_index("month")["avg_lt"].get(m, None) for m in all_months]
-        lt_by_site[site] = series
+        # Lead time por mes e picking type
+        lt_by_picking = {}
+        for pt in sorted(lt_s["picking_type"].unique()):
+            sub_pt = lt_s[lt_s["picking_type"] == pt]
+            series = []
+            for m in all_months:
+                sub_m = sub_pt[sub_pt["month"] == m]
+                series.append(wavg(sub_m, "avg_lead_time", "cnt") if len(sub_m) > 0 else None)
+            lt_by_picking[pt] = series
 
-    # ── Mix de metodo de envio por mes ──
-    df_mode["month"] = df_mode["month"].astype(str)
-    mode_by_method = pivot_by(df_mode, "shipping_mode", "shipments", all_months)
+        by_site[site] = {
+            "sold":          sold,
+            "delivered":     delivered,
+            "delivery_rate": rate,
+            "lead_time":     lt_avg,
+            "lt_by_picking": lt_by_picking,
+        }
 
-    # ── FBM semanal ──
-    df_fbm = df_fbm.sort_values("week")
-    fbm_labels = df_fbm["week"].astype(str).tolist()
-
-    # ── KPIs (ultimo mes completo) ──
-    last_month = ops_global.iloc[-2] if len(ops_global) >= 2 else ops_global.iloc[-1]
-    kpi_lt_last = lt_overall.set_index("month")["avg_lt"].get(
-        str(last_month["month"]), None
-    )
+    # KPIs globais
+    total_sold      = int(df_sales["total_items"].sum())
+    total_delivered = int(df_sales["delivered_items"].sum())
+    total_lt_cnt    = df_lt["cnt"].sum()
+    overall_lt      = wavg(df_lt, "avg_lead_time", "cnt") or 0
 
     return {
-        "updated_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "labels":  all_months,
+        "sites":   all_sites,
+        "by_site": by_site,
         "kpis": {
-            "total_items":     int(ops_global["total_items"].sum()),
-            "delivered_items": int(ops_global["delivered_items"].sum()),
-            "delivery_rate":   round(
-                ops_global["delivered_items"].sum() /
-                max(ops_global["total_items"].sum(), 1) * 100, 1
-            ),
-            "avg_lead_time":   round(float(lt_avg_global[-2])
-                                     if lt_avg_global[-2] else 0, 1),
-            "active_sites":    int(df_ops["site"].nunique()),
+            "total_sold":      total_sold,
+            "total_delivered": total_delivered,
+            "delivery_rate":   round(total_delivered / max(total_sold, 1) * 100, 1),
+            "avg_lead_time":   overall_lt,
+            "active_sites":    len(all_sites),
             "total_sellers":   len(MAIN_CUSTS),
-        },
-        "monthly": {
-            "labels":           all_months,
-            "total_items":      total_items,
-            "delivered_items":  delivered_items,
-            "cancelled":        cancelled_ship,
-            "delivery_rate":    delivery_rate,
-            "lt_avg":           lt_avg_global,
-            "items_by_site":    items_by_site,
-            "delivered_by_site":delivered_by_site,
-            "lt_by_logtype":    lt_by_logtype,
-            "lt_by_site":       lt_by_site,
-            "mode_by_method":   mode_by_method,
-        },
-        "fbm": {
-            "labels":    fbm_labels,
-            "fbm":       to_float(df_fbm["fbm_units"]).astype(int).tolist(),
-            "me2":       to_float(df_fbm["me2_units"]).astype(int).tolist(),
-            "flex":      to_float(df_fbm["flex_units"]).astype(int).tolist(),
-            "xd":        to_float(df_fbm["xd_units"]).astype(int).tolist(),
-            "gmv_fbm":   to_float(df_fbm["gmv_fbm_usd"].astype(float)).round(0).astype(int).tolist(),
-            "gmv_me2":   to_float(df_fbm["gmv_me2_usd"].astype(float)).round(0).astype(int).tolist(),
         },
     }
 
@@ -285,48 +220,73 @@ HTML_TEMPLATE = """\
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root {{
-  --blue:   #2D73F5; --orange: #FF7A00; --green:  #00C48C;
-  --red:    #FF4D4F; --purple: #9747FF; --teal:   #00BCD4;
-  --bg:     #F4F6FA; --card:   #FFFFFF; --text:   #1A1A2E; --muted: #7A8099;
+  --blue:#2D73F5; --orange:#FF7A00; --green:#00C48C; --red:#FF4D4F;
+  --purple:#9747FF; --teal:#00BCD4; --yellow:#FFC107; --lime:#8BC34A;
+  --bg:#F4F6FA; --card:#FFFFFF; --text:#1A1A2E; --muted:#7A8099;
+  --border:#E8EAEE;
 }}
-* {{ box-sizing: border-box; margin: 0; padding: 0; }}
-body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: var(--bg); color: var(--text); }}
-.header {{ background: var(--blue); color: #fff; padding: 18px 32px;
-           display: flex; align-items: center; gap: 12px; }}
-.header h1 {{ font-size: 1.25rem; font-weight: 700; }}
-.badge {{ background: rgba(255,255,255,.2); border-radius: 20px;
-          padding: 3px 12px; font-size: .75rem; margin-left: auto; }}
-.tabs {{ background: #fff; border-bottom: 2px solid #E8EAEE;
-         display: flex; padding: 0 32px; gap: 4px; overflow-x: auto; }}
-.tab {{ padding: 14px 18px; cursor: pointer; font-size: .88rem; white-space: nowrap;
-        color: var(--muted); border-bottom: 3px solid transparent;
-        margin-bottom: -2px; transition: all .2s; }}
-.tab.active {{ color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }}
-.tab:hover:not(.active) {{ color: var(--text); }}
-.content {{ padding: 24px 32px; }}
-.pane {{ display: none; }}
-.pane.active {{ display: block; }}
-.kpi-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-             gap: 14px; margin-bottom: 24px; }}
-.kpi-card {{ background: var(--card); border-radius: 12px; padding: 18px 20px;
-             box-shadow: 0 1px 4px rgba(0,0,0,.08); }}
-.kpi-card .label {{ font-size: .76rem; color: var(--muted); margin-bottom: 6px; }}
-.kpi-card .value {{ font-size: 1.7rem; font-weight: 700; }}
-.kpi-card .sub   {{ font-size: .73rem; color: var(--muted); margin-top: 3px; }}
-.kpi-card.blue   .value {{ color: var(--blue); }}
-.kpi-card.green  .value {{ color: var(--green); }}
-.kpi-card.orange .value {{ color: var(--orange); }}
-.kpi-card.red    .value {{ color: var(--red); }}
-.chart-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
-               gap: 18px; }}
-.chart-card {{ background: var(--card); border-radius: 12px; padding: 20px;
-               box-shadow: 0 1px 4px rgba(0,0,0,.08); }}
-.chart-card h3 {{ font-size: .9rem; font-weight: 600; margin-bottom: 14px;
-                  color: var(--text); }}
-.chart-card canvas {{ max-height: 270px; }}
-.full {{ grid-column: 1 / -1; }}
-.footer {{ text-align: center; padding: 18px; font-size: .73rem; color: var(--muted); }}
+*{{ box-sizing:border-box; margin:0; padding:0; }}
+body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+       background:var(--bg); color:var(--text); }}
+
+/* Header */
+.header{{ background:var(--blue); color:#fff; padding:16px 28px;
+          display:flex; align-items:center; gap:12px; }}
+.header h1{{ font-size:1.2rem; font-weight:700; }}
+.badge{{ background:rgba(255,255,255,.2); border-radius:20px;
+         padding:3px 12px; font-size:.73rem; margin-left:auto; white-space:nowrap; }}
+
+/* Tabs */
+.tabs{{ background:#fff; border-bottom:2px solid var(--border);
+        display:flex; padding:0 28px; gap:2px; overflow-x:auto; }}
+.tab{{ padding:13px 16px; cursor:pointer; font-size:.86rem; white-space:nowrap;
+       color:var(--muted); border-bottom:3px solid transparent;
+       margin-bottom:-2px; transition:.15s; user-select:none; }}
+.tab.active{{ color:var(--blue); border-bottom-color:var(--blue); font-weight:600; }}
+.tab:hover:not(.active){{ color:var(--text); }}
+
+/* Content */
+.content{{ padding:22px 28px; }}
+.pane{{ display:none; }}
+.pane.active{{ display:block; }}
+
+/* KPI grid */
+.kpi-grid{{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+            gap:12px; margin-bottom:22px; }}
+.kpi{{ background:var(--card); border-radius:10px; padding:16px 18px;
+       box-shadow:0 1px 4px rgba(0,0,0,.07); }}
+.kpi .lbl{{ font-size:.74rem; color:var(--muted); margin-bottom:5px; }}
+.kpi .val{{ font-size:1.65rem; font-weight:700; line-height:1; }}
+.kpi .sub{{ font-size:.71rem; color:var(--muted); margin-top:4px; }}
+.kpi.c-blue   .val{{ color:var(--blue); }}
+.kpi.c-green  .val{{ color:var(--green); }}
+.kpi.c-orange .val{{ color:var(--orange); }}
+.kpi.c-purple .val{{ color:var(--purple); }}
+
+/* Section title */
+.section-title{{ font-size:.82rem; font-weight:700; color:var(--muted);
+                 text-transform:uppercase; letter-spacing:.06em;
+                 margin:24px 0 12px; padding-bottom:6px;
+                 border-bottom:1px solid var(--border); }}
+
+/* Chart grid */
+.chart-grid{{ display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr));
+              gap:16px; }}
+.chart-grid.cols-1{{ grid-template-columns:1fr; }}
+.chart-card{{ background:var(--card); border-radius:10px; padding:18px 20px;
+              box-shadow:0 1px 4px rgba(0,0,0,.07); }}
+.chart-card h3{{ font-size:.88rem; font-weight:600; margin-bottom:12px; }}
+.chart-card canvas{{ max-height:260px; }}
+.full{{ grid-column:1/-1; }}
+
+/* Picking-type grid (Chart 4) */
+.picking-grid{{ display:grid;
+                grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+                gap:16px; }}
+.picking-grid .chart-card canvas{{ max-height:200px; }}
+
+/* Footer */
+.footer{{ text-align:center; padding:16px; font-size:.71rem; color:var(--muted); }}
 </style>
 </head>
 <body>
@@ -337,323 +297,220 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 </div>
 
 <div class="tabs">
-  <div class="tab active"  onclick="showTab('overview', this)">Visao Geral</div>
-  <div class="tab"         onclick="showTab('vendas',   this)">Vendas e Entregas</div>
-  <div class="tab"         onclick="showTab('leadtime', this)">Lead Time</div>
-  <div class="tab"         onclick="showTab('metodos',  this)">Metodos de Envio</div>
-  <div class="tab"         onclick="showTab('fbm',      this)">FBM</div>
+  <div class="tab active" onclick="showTab('overview',this)">Visao Geral</div>
+  <div class="tab"        onclick="showTab('tab2',    this)">Vendas (em breve)</div>
+  <div class="tab"        onclick="showTab('tab3',    this)">Lead Time (em breve)</div>
+  <div class="tab"        onclick="showTab('tab4',    this)">Metodos (em breve)</div>
 </div>
 
 <div class="content">
 
 <!-- ── VISAO GERAL ── -->
 <div id="pane-overview" class="pane active">
+
+  <!-- KPIs -->
   <div class="kpi-grid">
-    <div class="kpi-card blue">
-      <div class="label">Itens Vendidos (12m)</div>
-      <div class="value" id="k-total"></div>
-      <div class="sub">Total de itens criados</div>
+    <div class="kpi c-blue">
+      <div class="lbl">Itens Vendidos (2026)</div>
+      <div class="val" id="k-sold"></div>
+      <div class="sub">Total de ordens criadas</div>
     </div>
-    <div class="kpi-card green">
-      <div class="label">Itens Entregues (12m)</div>
-      <div class="value" id="k-delivered"></div>
-      <div class="sub">Status = delivered</div>
+    <div class="kpi c-green">
+      <div class="lbl">Itens Entregues (2026)</div>
+      <div class="val" id="k-del"></div>
+      <div class="sub">FLAG_DELIVERED = 1</div>
     </div>
-    <div class="kpi-card orange">
-      <div class="label">Taxa de Entrega</div>
-      <div class="value" id="k-rate"></div>
-      <div class="sub">Entregues / Criados</div>
+    <div class="kpi c-orange">
+      <div class="lbl">Taxa de Entrega</div>
+      <div class="val" id="k-rate"></div>
+      <div class="sub">Entregues / Vendidos</div>
     </div>
-    <div class="kpi-card">
-      <div class="label">Lead Time Medio</div>
-      <div class="value" id="k-lt"></div>
-      <div class="sub">Dias (ultimo mes)</div>
+    <div class="kpi c-purple">
+      <div class="lbl">Lead Time Medio</div>
+      <div class="val" id="k-lt"></div>
+      <div class="sub">Dias habeis (entregues)</div>
     </div>
-    <div class="kpi-card">
-      <div class="label">Sites Ativos</div>
-      <div class="value" id="k-sites"></div>
-      <div class="sub">Todos os paises</div>
+    <div class="kpi">
+      <div class="lbl">Paises Ativos</div>
+      <div class="val" id="k-sites"></div>
+      <div class="sub">Sites com dados 2026</div>
     </div>
-    <div class="kpi-card">
-      <div class="label">Sellers Monitorados</div>
-      <div class="value" id="k-sellers"></div>
-      <div class="sub">Custs principais</div>
-    </div>
-  </div>
-  <div class="chart-grid">
-    <div class="chart-card">
-      <h3>Itens Vendidos vs Entregues por Mes</h3>
-      <canvas id="c-ov-vendas"></canvas>
-    </div>
-    <div class="chart-card">
-      <h3>Taxa de Entrega (%) por Mes</h3>
-      <canvas id="c-ov-rate"></canvas>
-    </div>
-    <div class="chart-card">
-      <h3>Lead Time Medio por Mes (dias)</h3>
-      <canvas id="c-ov-lt"></canvas>
-    </div>
-    <div class="chart-card">
-      <h3>Mix de Metodo de Envio (ultimo mes)</h3>
-      <canvas id="c-ov-mode"></canvas>
+    <div class="kpi">
+      <div class="lbl">Sellers Monitorados</div>
+      <div class="val" id="k-sellers"></div>
+      <div class="sub">Custs da lista principal</div>
     </div>
   </div>
-</div>
 
-<!-- ── VENDAS E ENTREGAS ── -->
-<div id="pane-vendas" class="pane">
+  <!-- Grafico 1 -->
+  <div class="section-title">Grafico 1 — Itens Vendidos vs Entregues por Mes (por Pais)</div>
   <div class="chart-grid">
-    <div class="chart-card full">
-      <h3>Itens Vendidos por Mes — por Site</h3>
-      <canvas id="c-v-site-total"></canvas>
-    </div>
-    <div class="chart-card full">
-      <h3>Itens Entregues por Mes — por Site</h3>
-      <canvas id="c-v-site-delivered"></canvas>
+    <div class="chart-card">
+      <h3>Itens Vendidos por Mes</h3>
+      <canvas id="c1-sold"></canvas>
     </div>
     <div class="chart-card">
-      <h3>Cancelamentos por Mes</h3>
-      <canvas id="c-v-cancelled"></canvas>
-    </div>
-    <div class="chart-card">
-      <h3>Taxa de Entrega por Mes (%)</h3>
-      <canvas id="c-v-rate"></canvas>
+      <h3>Itens Entregues por Mes</h3>
+      <canvas id="c1-delivered"></canvas>
     </div>
   </div>
-</div>
 
-<!-- ── LEAD TIME ── -->
-<div id="pane-leadtime" class="pane">
-  <div class="chart-grid">
+  <!-- Grafico 2 -->
+  <div class="section-title">Grafico 2 — Taxa de Entrega por Mes (por Pais)</div>
+  <div class="chart-grid cols-1">
     <div class="chart-card full">
-      <h3>Lead Time Medio por Tipo Logistico (dias)</h3>
-      <canvas id="c-lt-logtype"></canvas>
-    </div>
-    <div class="chart-card full">
-      <h3>Lead Time Medio por Site (dias)</h3>
-      <canvas id="c-lt-site"></canvas>
-    </div>
-    <div class="chart-card">
-      <h3>Handling Time por Tipo Logistico (dias)</h3>
-      <canvas id="c-lt-ht"></canvas>
-    </div>
-    <div class="chart-card">
-      <h3>Shipping Time por Tipo Logistico (dias)</h3>
-      <canvas id="c-lt-st"></canvas>
+      <h3>Taxa de Entrega (%) por Mes e Pais</h3>
+      <canvas id="c2-rate"></canvas>
     </div>
   </div>
-</div>
 
-<!-- ── METODOS DE ENVIO ── -->
-<div id="pane-metodos" class="pane">
-  <div class="chart-grid">
+  <!-- Grafico 3 -->
+  <div class="section-title">Grafico 3 — Lead Time Medio por Mes (por Pais)</div>
+  <div class="chart-grid cols-1">
     <div class="chart-card full">
-      <h3>Envios por Metodo por Mes (empilhado)</h3>
-      <canvas id="c-m-stacked"></canvas>
-    </div>
-    <div class="chart-card full">
-      <h3>Envios por Metodo por Mes (linhas)</h3>
-      <canvas id="c-m-lines"></canvas>
+      <h3>Lead Time Medio — Dias Habeis (apenas entregues)</h3>
+      <canvas id="c3-lt"></canvas>
     </div>
   </div>
-</div>
 
-<!-- ── FBM ── -->
-<div id="pane-fbm" class="pane">
-  <div class="chart-grid">
-    <div class="chart-card">
-      <h3>Unidades Semanais — FBM vs ME2</h3>
-      <canvas id="c-f-fbm-me2"></canvas>
-    </div>
-    <div class="chart-card">
-      <h3>Unidades Semanais — Flex + XD</h3>
-      <canvas id="c-f-flex-xd"></canvas>
-    </div>
-    <div class="chart-card full">
-      <h3>Todos os Modais — Empilhado</h3>
-      <canvas id="c-f-stacked"></canvas>
-    </div>
-    <div class="chart-card full">
-      <h3>GMV Semanal FBM vs ME2 (USD)</h3>
-      <canvas id="c-f-gmv"></canvas>
-    </div>
-  </div>
+  <!-- Grafico 4 -->
+  <div class="section-title">Grafico 4 — Lead Time por Picking Type e Pais</div>
+  <div class="picking-grid" id="c4-container"></div>
+
+</div><!-- /pane-overview -->
+
+<!-- Placeholders -->
+<div id="pane-tab2" class="pane">
+  <p style="padding:40px;color:var(--muted);text-align:center">Em construcao...</p>
+</div>
+<div id="pane-tab3" class="pane">
+  <p style="padding:40px;color:var(--muted);text-align:center">Em construcao...</p>
+</div>
+<div id="pane-tab4" class="pane">
+  <p style="padding:40px;color:var(--muted);text-align:center">Em construcao...</p>
 </div>
 
 </div><!-- /content -->
 
 <div class="footer">
-  Fonte: meli-bi-data · WHOWNER · {title} · <span id="footer-dt"></span>
+  Fonte: meli-bi-data · SBOX_OPER_MP · a partir de 2026-01-01 · <span id="footer-dt"></span>
 </div>
 
 <script>
 const D = {data_json};
 
-// ── Utilitarios ──────────────────────────────────────────────────────────────
-function fmtN(n) {{
-  if (n == null) return "—";
-  if (n >= 1e6) return (n/1e6).toFixed(1)+"M";
-  if (n >= 1e3) return (n/1e3).toFixed(1)+"K";
+// ── Utilitarios ───────────────────────────────────────────────────────────────
+function fmtN(n){{
+  if(n==null) return "—";
+  if(n>=1e6)  return (n/1e6).toFixed(1)+"M";
+  if(n>=1e3)  return (n/1e3).toFixed(1)+"K";
   return String(n);
 }}
-function showTab(name, el) {{
-  document.querySelectorAll(".pane").forEach(p => p.classList.remove("active"));
-  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+function showTab(name,el){{
+  document.querySelectorAll(".pane").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".tab") .forEach(t=>t.classList.remove("active"));
   document.getElementById("pane-"+name).classList.add("active");
   el.classList.add("active");
 }}
 
 // ── KPIs ──────────────────────────────────────────────────────────────────────
-document.getElementById("updated").textContent  = D.updated_at;
+const k = D.kpis;
+document.getElementById("updated") .textContent = D.updated_at;
 document.getElementById("footer-dt").textContent = D.updated_at;
-document.getElementById("k-total").textContent   = fmtN(D.kpis.total_items);
-document.getElementById("k-delivered").textContent = fmtN(D.kpis.delivered_items);
-document.getElementById("k-rate").textContent    = D.kpis.delivery_rate + "%";
-document.getElementById("k-lt").textContent      = D.kpis.avg_lead_time + "d";
-document.getElementById("k-sites").textContent   = D.kpis.active_sites;
-document.getElementById("k-sellers").textContent = D.kpis.total_sellers;
+document.getElementById("k-sold")   .textContent = fmtN(k.total_sold);
+document.getElementById("k-del")    .textContent = fmtN(k.total_delivered);
+document.getElementById("k-rate")   .textContent = k.delivery_rate+"%";
+document.getElementById("k-lt")     .textContent = k.avg_lead_time+"d";
+document.getElementById("k-sites")  .textContent = k.active_sites;
+document.getElementById("k-sellers").textContent = k.total_sellers;
 
-// ── Paleta ────────────────────────────────────────────────────────────────────
-const COLORS = [
-  "#2D73F5","#FF7A00","#00C48C","#9747FF","#FF4D4F",
-  "#00BCD4","#FFC107","#8BC34A","#E91E63","#607D8B"
-];
-const ax = (c,a) => c + Math.round(a*255).toString(16).padStart(2,"0");
+// ── Paleta — uma cor por pais ─────────────────────────────────────────────────
+const PALETTE = {{
+  MLB:"#2D73F5", MLA:"#FF7A00", MLC:"#00C48C",
+  MLM:"#9747FF", MLU:"#FF4D4F", default:"#607D8B"
+}};
+function color(site){{ return PALETTE[site]||PALETTE.default; }}
+function ax(c,a){{ return c+Math.round(a*255).toString(16).padStart(2,"0"); }}
 
-function mkLine(label, data, color, fill=false) {{
-  return {{ label, data, borderColor: color,
-    backgroundColor: fill ? ax(color,0.12) : "transparent",
-    borderWidth: 2, pointRadius: 3, tension: 0.3, fill }};
+// ── Funcoes de chart ──────────────────────────────────────────────────────────
+function mkLine(label, data, c, fill=false){{
+  return {{ label, data, borderColor:c,
+    backgroundColor: fill ? ax(c,0.12) : "transparent",
+    borderWidth:2, pointRadius:3, tension:0.35,
+    spanGaps:true, fill }};
 }}
-function mkBar(label, data, color) {{
-  return {{ label, data, backgroundColor: ax(color, 0.85), borderRadius: 4 }};
-}}
-function lineChart(id, labels, datasets) {{
-  return new Chart(document.getElementById(id), {{
-    type: "line", data: {{ labels, datasets }},
-    options: {{ responsive:true, interaction:{{mode:"index",intersect:false}},
-      plugins:{{legend:{{position:"top"}}}}, scales:{{y:{{beginAtZero:false}}}} }}
-  }});
-}}
-function barChart(id, labels, datasets, stacked=false) {{
-  return new Chart(document.getElementById(id), {{
-    type: "bar", data: {{ labels, datasets }},
-    options: {{ responsive:true, interaction:{{mode:"index",intersect:false}},
+function lineChart(id, labels, datasets, yLabel=""){{
+  return new Chart(document.getElementById(id),{{
+    type:"line", data:{{labels,datasets}},
+    options:{{
+      responsive:true,
+      interaction:{{mode:"index",intersect:false}},
       plugins:{{legend:{{position:"top"}}}},
-      scales:{{ x:{{stacked}}, y:{{stacked,beginAtZero:true}} }} }}
+      scales:{{
+        y:{{beginAtZero:false,
+           title:{{display:!!yLabel, text:yLabel, font:{{size:11}}}}}}
+      }}
+    }}
   }});
 }}
-function doughnutChart(id, labels, data) {{
-  const bg = COLORS.slice(0, labels.length);
-  return new Chart(document.getElementById(id), {{
-    type: "doughnut", data: {{ labels, datasets:[{{ data, backgroundColor:bg }}] }},
-    options: {{ responsive:true, plugins:{{legend:{{position:"right"}}}} }}
+function lineChartEl(el, labels, datasets, yLabel=""){{
+  return new Chart(el,{{
+    type:"line", data:{{labels,datasets}},
+    options:{{
+      responsive:true,
+      interaction:{{mode:"index",intersect:false}},
+      plugins:{{legend:{{position:"top"}}}},
+      scales:{{
+        y:{{beginAtZero:false,
+           title:{{display:!!yLabel, text:yLabel, font:{{size:11}}}}}}
+      }}
+    }}
   }});
 }}
 
-const ml = D.monthly.labels;
-const mo = D.monthly;
+const ml = D.labels;
+const bs = D.by_site;
+const sites = D.sites;
 
-// ── Visao Geral ───────────────────────────────────────────────────────────────
-lineChart("c-ov-vendas", ml, [
-  mkLine("Vendidos",  mo.total_items,     COLORS[0], true),
-  mkLine("Entregues", mo.delivered_items, COLORS[2], true),
-]);
-lineChart("c-ov-rate", ml, [
-  mkLine("Taxa Entrega %", mo.delivery_rate, COLORS[2], true),
-]);
-lineChart("c-ov-lt", ml, [
-  mkLine("Lead Time (dias)", mo.lt_avg, COLORS[3], true),
-]);
-// Doughnut do ultimo mes para mix de metodo
-(function() {{
-  const lastIdx = ml.length - 2; // penultimo mes (mais completo)
-  const labels = Object.keys(mo.mode_by_method);
-  const vals   = labels.map(k => mo.mode_by_method[k][lastIdx] || 0);
-  // filtra zeros
-  const pairs  = labels.map((l,i) => [l, vals[i]]).filter(p => p[1] > 0)
-                        .sort((a,b) => b[1]-a[1]).slice(0, 8);
-  doughnutChart("c-ov-mode",
-    pairs.map(p=>p[0]), pairs.map(p=>p[1]));
-}})();
+// ── Grafico 1 — Vendidos e Entregues ──────────────────────────────────────────
+lineChart("c1-sold", ml,
+  sites.map(s => mkLine(s, bs[s].sold, color(s))),
+  "Itens");
+lineChart("c1-delivered", ml,
+  sites.map(s => mkLine(s, bs[s].delivered, color(s))),
+  "Itens");
 
-// ── Vendas e Entregas ─────────────────────────────────────────────────────────
-barChart("c-v-site-total",
-  ml,
-  Object.entries(mo.items_by_site).map(([site,data], i) =>
-    mkBar(site, data, COLORS[i % COLORS.length])),
-  true
-);
-barChart("c-v-site-delivered",
-  ml,
-  Object.entries(mo.delivered_by_site).map(([site,data], i) =>
-    mkBar(site, data, COLORS[i % COLORS.length])),
-  true
-);
-barChart("c-v-cancelled", ml, [
-  mkBar("Cancelados", mo.cancelled, COLORS[4])
-]);
-lineChart("c-v-rate", ml, [
-  mkLine("Taxa Entrega %", mo.delivery_rate, COLORS[2], true)
-]);
+// ── Grafico 2 — Taxa de Entrega ───────────────────────────────────────────────
+lineChart("c2-rate", ml,
+  sites.map(s => mkLine(s, bs[s].delivery_rate, color(s), true)),
+  "%");
 
-// ── Lead Time ─────────────────────────────────────────────────────────────────
-lineChart("c-lt-logtype", ml,
-  Object.entries(mo.lt_by_logtype).map(([lt, data], i) =>
-    mkLine(lt, data, COLORS[i % COLORS.length]))
-);
-lineChart("c-lt-site", ml,
-  Object.entries(mo.lt_by_site).map(([site, data], i) =>
-    mkLine(site, data, COLORS[i % COLORS.length]))
-);
-// Handling vs Shipping time (primeiro tipo logistico disponivel como exemplo)
-(function() {{
-  // Agrupa handling e shipping usando os dados brutos ja pre-calculados globalmente
-  // Usa lt_by_logtype como proxy — os dados brutos granulares nao estao no objeto
-  // Plotamos FBM HR como referencia
-  const ltKeys = Object.keys(mo.lt_by_logtype);
-  lineChart("c-lt-ht", ml,
-    ltKeys.slice(0,4).map((k,i) => mkLine(k, mo.lt_by_logtype[k], COLORS[i]))
-  );
-  lineChart("c-lt-st", ml,
-    ltKeys.slice(0,4).map((k,i) => mkLine(k, mo.lt_by_logtype[k], COLORS[i]))
-  );
-}})();
+// ── Grafico 3 — Lead Time por Pais ────────────────────────────────────────────
+lineChart("c3-lt", ml,
+  sites.map(s => mkLine(s, bs[s].lead_time, color(s))),
+  "Dias habeis");
 
-// ── Metodos de Envio ──────────────────────────────────────────────────────────
-const modeEntries = Object.entries(mo.mode_by_method)
-  .sort((a,b) => b[1].reduce((s,v)=>s+v,0) - a[1].reduce((s,v)=>s+v,0));
+// ── Grafico 4 — Lead Time por Pais e Picking Type ────────────────────────────
+// Um chart por pais, linhas = picking types
+const PICK_COLORS = ["#2D73F5","#FF7A00","#00C48C","#9747FF","#FF4D4F","#607D8B"];
+const container = document.getElementById("c4-container");
 
-barChart("c-m-stacked", ml,
-  modeEntries.map(([mode, data], i) => mkBar(mode, data, COLORS[i % COLORS.length])),
-  true
-);
-lineChart("c-m-lines", ml,
-  modeEntries.slice(0,6).map(([mode, data], i) =>
-    mkLine(mode, data, COLORS[i % COLORS.length]))
-);
+sites.forEach(site => {{
+  const picks = Object.keys(bs[site].lt_by_picking);
+  if(!picks.length) return;
 
-// ── FBM ───────────────────────────────────────────────────────────────────────
-const fl = D.fbm.labels;
-const fb = D.fbm;
-lineChart("c-f-fbm-me2", fl, [
-  mkLine("FBM",  fb.fbm,  COLORS[0], true),
-  mkLine("ME2",  fb.me2,  COLORS[1], true),
-]);
-lineChart("c-f-flex-xd", fl, [
-  mkLine("Flex", fb.flex, COLORS[2], true),
-  mkLine("XD",   fb.xd,   COLORS[3], true),
-]);
-barChart("c-f-stacked", fl, [
-  mkBar("FBM",  fb.fbm,  COLORS[0]),
-  mkBar("ME2",  fb.me2,  COLORS[1]),
-  mkBar("Flex", fb.flex, COLORS[2]),
-  mkBar("XD",   fb.xd,   COLORS[3]),
-], true);
-lineChart("c-f-gmv", fl, [
-  mkLine("GMV FBM USD", fb.gmv_fbm, COLORS[0], true),
-  mkLine("GMV ME2 USD", fb.gmv_me2, COLORS[1], true),
-]);
+  const card = document.createElement("div");
+  card.className = "chart-card";
+  card.innerHTML = `<h3>Lead Time — ${{site}}</h3><canvas></canvas>`;
+  container.appendChild(card);
+
+  const canvas = card.querySelector("canvas");
+  const datasets = picks.map((pt,i) => mkLine(
+    pt, bs[site].lt_by_picking[pt],
+    PICK_COLORS[i % PICK_COLORS.length]
+  ));
+  lineChartEl(canvas, ml, datasets, "Dias habeis");
+}});
 </script>
 </body>
 </html>
@@ -663,7 +520,11 @@ lineChart("c-f-gmv", fl, [
 # ── GERAR HTML ────────────────────────────────────────────────────────────────
 
 def generate_html(data: dict, title: str, output: str = "index.html"):
-    data_json = json.dumps(data, ensure_ascii=False, default=str)
+    payload = {
+        "updated_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        **data,
+    }
+    data_json = json.dumps(payload, ensure_ascii=False, default=str)
     html = HTML_TEMPLATE.format(title=title, data_json=data_json)
     with open(output, "w", encoding="utf-8") as f:
         f.write(html)
@@ -677,19 +538,17 @@ def main():
     client = bigquery.Client(project=PROJECT)
 
     print("Buscando dados...")
-    df_ops  = run_query(client, QUERY_MONTHLY_OPS,     "ops mensais")
-    df_lt   = run_query(client, QUERY_LEADTIME,         "lead time")
-    df_mode = run_query(client, QUERY_SHIPPING_METHOD,  "metodos")
-    df_fbm  = run_query(client, QUERY_FBM_WEEKLY,       "fbm semanal")
+    df_sales = run_query(client, QUERY_SALES,    "vendas/entregas")
+    df_lt    = run_query(client, QUERY_LEADTIME, "lead time")
 
-    print("Montando objeto de dados...")
-    data = build_data(df_ops, df_lt, df_mode, df_fbm)
+    print("Montando dados...")
+    data = build_overview(df_sales, df_lt)
 
     print("Gerando HTML...")
     generate_html(data, DASHBOARD_TITLE)
 
     print("\nPara publicar:")
-    print("  git add index.html && git commit -m 'atualiza dashboard' && git push")
+    print("  git add index.html && git commit -m 'visao geral por pais' && git push")
 
 
 if __name__ == "__main__":
