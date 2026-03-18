@@ -34,8 +34,9 @@ MAIN_CUSTS = [
     537991631, 713184976, 713183870, 713189102, 614858404,
     465005594, 2954307253, 2640089931, 3149449085,
 ]
-_CUSTS       = ", ".join(str(c) for c in MAIN_CUSTS)
-_SITES_GERAL = "'MLA', 'MLC', 'MLM', 'MLU'"
+_CUSTS              = ", ".join(str(c) for c in MAIN_CUSTS)
+_SITES_GERAL        = "'MLA', 'MLC', 'MLM', 'MLU'"   # Points & Others
+_SITES_GERAL_CARDS  = "'MLA', 'MLC', 'MLU'"           # Cards (MLM sem dados)
 
 # ── QUERIES — ABA 1: Points & Others ─────────────────────────────────────────
 
@@ -131,7 +132,7 @@ WITH base AS (
   FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_PREPAID`
   WHERE SHP_DATE_CREATED_ID >= '{DATE_FROM}'
     AND SHP_SENDER_ID IN ({_CUSTS})
-    AND SIT_SITE_ID IN ({_SITES_GERAL})
+    AND SIT_SITE_ID IN ({_SITES_GERAL_CARDS})
 )
 SELECT
   month,
@@ -170,7 +171,7 @@ WITH base AS (
   FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_PREPAID`
   WHERE SHP_DATE_CREATED_ID >= '{DATE_FROM}'
     AND SHP_SENDER_ID IN ({_CUSTS})
-    AND SIT_SITE_ID IN ({_SITES_GERAL})
+    AND SIT_SITE_ID IN ({_SITES_GERAL_CARDS})
     AND SHP_STATUS_ID = 'delivered'
     AND SHP_DATETIME_DELIVERED_ID IS NOT NULL
     AND DATE_DIFF(DATE(SHP_DATETIME_DELIVERED_ID), SHP_DATE_CREATED_ID, DAY) > 0
