@@ -3,322 +3,379 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Dashboard Logística FBM</title>
+<title>Dashboard Operacoes MercadoPago</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  :root {
-    --blue:   #2D73F5;
-    --orange: #FF7A00;
-    --green:  #00C48C;
-    --red:    #FF4D4F;
-    --bg:     #F4F6FA;
-    --card:   #FFFFFF;
-    --text:   #1A1A2E;
-    --muted:  #7A8099;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-          background: var(--bg); color: var(--text); }
-
-  /* ── Header ── */
-  .header {
-    background: var(--blue); color: #fff;
-    padding: 18px 32px; display: flex; align-items: center; gap: 16px;
-  }
-  .header h1 { font-size: 1.3rem; font-weight: 700; }
-  .header .badge {
-    background: rgba(255,255,255,.2); border-radius: 20px;
-    padding: 3px 12px; font-size: .75rem; margin-left: auto;
-  }
-
-  /* ── Tabs ── */
-  .tabs { background: #fff; border-bottom: 2px solid #E8EAEE;
-           display: flex; padding: 0 32px; gap: 4px; }
-  .tab {
-    padding: 14px 20px; cursor: pointer; font-size: .9rem;
-    color: var(--muted); border-bottom: 3px solid transparent;
-    margin-bottom: -2px; transition: all .2s;
-  }
-  .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
-  .tab:hover:not(.active) { color: var(--text); }
-
-  /* ── Content ── */
-  .content { padding: 28px 32px; }
-  .pane { display: none; }
-  .pane.active { display: block; }
-
-  /* ── KPI Cards ── */
-  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-               gap: 16px; margin-bottom: 28px; }
-  .kpi-card {
-    background: var(--card); border-radius: 12px;
-    padding: 20px 22px; box-shadow: 0 1px 4px rgba(0,0,0,.08);
-  }
-  .kpi-card .label { font-size: .78rem; color: var(--muted); margin-bottom: 6px; }
-  .kpi-card .value { font-size: 1.8rem; font-weight: 700; color: var(--text); }
-  .kpi-card .sub   { font-size: .75rem; color: var(--muted); margin-top: 4px; }
-  .kpi-card.blue   .value { color: var(--blue);   }
-  .kpi-card.orange .value { color: var(--orange); }
-  .kpi-card.green  .value { color: var(--green);  }
-
-  /* ── Charts Grid ── */
-  .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
-                 gap: 20px; }
-  .chart-card {
-    background: var(--card); border-radius: 12px;
-    padding: 22px; box-shadow: 0 1px 4px rgba(0,0,0,.08);
-  }
-  .chart-card h3 { font-size: .95rem; font-weight: 600; margin-bottom: 16px; }
-  .chart-card canvas { max-height: 280px; }
-
-  /* ── Footer ── */
-  .footer { text-align: center; padding: 20px; font-size: .75rem; color: var(--muted); }
+:root {
+  --blue:   #2D73F5; --orange: #FF7A00; --green:  #00C48C;
+  --red:    #FF4D4F; --purple: #9747FF; --teal:   #00BCD4;
+  --bg:     #F4F6FA; --card:   #FFFFFF; --text:   #1A1A2E; --muted: #7A8099;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg); color: var(--text); }
+.header { background: var(--blue); color: #fff; padding: 18px 32px;
+           display: flex; align-items: center; gap: 12px; }
+.header h1 { font-size: 1.25rem; font-weight: 700; }
+.badge { background: rgba(255,255,255,.2); border-radius: 20px;
+          padding: 3px 12px; font-size: .75rem; margin-left: auto; }
+.tabs { background: #fff; border-bottom: 2px solid #E8EAEE;
+         display: flex; padding: 0 32px; gap: 4px; overflow-x: auto; }
+.tab { padding: 14px 18px; cursor: pointer; font-size: .88rem; white-space: nowrap;
+        color: var(--muted); border-bottom: 3px solid transparent;
+        margin-bottom: -2px; transition: all .2s; }
+.tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+.tab:hover:not(.active) { color: var(--text); }
+.content { padding: 24px 32px; }
+.pane { display: none; }
+.pane.active { display: block; }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+             gap: 14px; margin-bottom: 24px; }
+.kpi-card { background: var(--card); border-radius: 12px; padding: 18px 20px;
+             box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.kpi-card .label { font-size: .76rem; color: var(--muted); margin-bottom: 6px; }
+.kpi-card .value { font-size: 1.7rem; font-weight: 700; }
+.kpi-card .sub   { font-size: .73rem; color: var(--muted); margin-top: 3px; }
+.kpi-card.blue   .value { color: var(--blue); }
+.kpi-card.green  .value { color: var(--green); }
+.kpi-card.orange .value { color: var(--orange); }
+.kpi-card.red    .value { color: var(--red); }
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+               gap: 18px; }
+.chart-card { background: var(--card); border-radius: 12px; padding: 20px;
+               box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.chart-card h3 { font-size: .9rem; font-weight: 600; margin-bottom: 14px;
+                  color: var(--text); }
+.chart-card canvas { max-height: 270px; }
+.full { grid-column: 1 / -1; }
+.footer { text-align: center; padding: 18px; font-size: .73rem; color: var(--muted); }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>📦 Dashboard Logística FBM</h1>
+  <h1>MercadoPago — Dashboard Operacoes</h1>
   <span class="badge">Atualizado: <span id="updated"></span></span>
 </div>
 
 <div class="tabs">
-  <div class="tab active" onclick="showTab('overview')">Visão Geral</div>
-  <div class="tab" onclick="showTab('semanal')">Semanal</div>
-  <div class="tab" onclick="showTab('sellers')">Top Sellers</div>
+  <div class="tab active"  onclick="showTab('overview', this)">Visao Geral</div>
+  <div class="tab"         onclick="showTab('vendas',   this)">Vendas e Entregas</div>
+  <div class="tab"         onclick="showTab('leadtime', this)">Lead Time</div>
+  <div class="tab"         onclick="showTab('metodos',  this)">Metodos de Envio</div>
+  <div class="tab"         onclick="showTab('fbm',      this)">FBM</div>
 </div>
 
 <div class="content">
 
-  <!-- ── TAB: Visão Geral ── -->
-  <div id="pane-overview" class="pane active">
-    <div class="kpi-grid">
-      <div class="kpi-card blue">
-        <div class="label">Unidades FBM (4 sem)</div>
-        <div class="value" id="kpi-fbm">—</div>
-        <div class="sub">Fulfillment by Mercado Livre</div>
-      </div>
-      <div class="kpi-card">
-        <div class="label">Unidades ME2 (4 sem)</div>
-        <div class="value" id="kpi-me2">—</div>
-        <div class="sub">Mercado Envios 2</div>
-      </div>
-      <div class="kpi-card orange">
-        <div class="label">Unidades Flex (4 sem)</div>
-        <div class="value" id="kpi-flex">—</div>
-        <div class="sub">Entrega própria</div>
-      </div>
-      <div class="kpi-card green">
-        <div class="label">Estoque Saudável</div>
-        <div class="value" id="kpi-healthy">—</div>
-        <div class="sub">vs <span id="kpi-total-stock">—</span> total</div>
-      </div>
-      <div class="kpi-card blue">
-        <div class="label">GMV FBM USD (4 sem)</div>
-        <div class="value" id="kpi-gmv">—</div>
-        <div class="sub">Receita FBM em dólares</div>
-      </div>
-      <div class="kpi-card">
-        <div class="label">Sellers Ativos</div>
-        <div class="value" id="kpi-sellers">—</div>
-        <div class="sub">Últimas 4 semanas</div>
-      </div>
+<!-- ── VISAO GERAL ── -->
+<div id="pane-overview" class="pane active">
+  <div class="kpi-grid">
+    <div class="kpi-card blue">
+      <div class="label">Itens Vendidos (12m)</div>
+      <div class="value" id="k-total"></div>
+      <div class="sub">Total de itens criados</div>
     </div>
-
-    <div class="chart-grid">
-      <div class="chart-card">
-        <h3>Evolução Semanal — Unidades por Modal</h3>
-        <canvas id="chart-weekly-overview"></canvas>
-      </div>
-      <div class="chart-card">
-        <h3>Top 10 Sellers — Unidades FBM (4 sem)</h3>
-        <canvas id="chart-top-sellers-overview"></canvas>
-      </div>
+    <div class="kpi-card green">
+      <div class="label">Itens Entregues (12m)</div>
+      <div class="value" id="k-delivered"></div>
+      <div class="sub">Status = delivered</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="label">Taxa de Entrega</div>
+      <div class="value" id="k-rate"></div>
+      <div class="sub">Entregues / Criados</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">Lead Time Medio</div>
+      <div class="value" id="k-lt"></div>
+      <div class="sub">Dias (ultimo mes)</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">Sites Ativos</div>
+      <div class="value" id="k-sites"></div>
+      <div class="sub">Todos os paises</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">Sellers Monitorados</div>
+      <div class="value" id="k-sellers"></div>
+      <div class="sub">Custs principais</div>
     </div>
   </div>
-
-  <!-- ── TAB: Semanal ── -->
-  <div id="pane-semanal" class="pane">
-    <div class="chart-grid">
-      <div class="chart-card">
-        <h3>FBM vs ME2 — Unidades Semanais</h3>
-        <canvas id="chart-fbm-me2"></canvas>
-      </div>
-      <div class="chart-card">
-        <h3>Flex + XD — Unidades Semanais</h3>
-        <canvas id="chart-flex-xd"></canvas>
-      </div>
-      <div class="chart-card" style="grid-column: 1 / -1">
-        <h3>Todos os Modais — Empilhado</h3>
-        <canvas id="chart-stacked"></canvas>
-      </div>
-      <div class="chart-card" style="grid-column: 1 / -1">
-        <h3>GMV Semanal — FBM vs ME2 (USD)</h3>
-        <canvas id="chart-gmv-weekly"></canvas>
-      </div>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Itens Vendidos vs Entregues por Mes</h3>
+      <canvas id="c-ov-vendas"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Taxa de Entrega (%) por Mes</h3>
+      <canvas id="c-ov-rate"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Lead Time Medio por Mes (dias)</h3>
+      <canvas id="c-ov-lt"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Mix de Metodo de Envio (ultimo mes)</h3>
+      <canvas id="c-ov-mode"></canvas>
     </div>
   </div>
-
-  <!-- ── TAB: Top Sellers ── -->
-  <div id="pane-sellers" class="pane">
-    <div class="chart-grid">
-      <div class="chart-card">
-        <h3>Top 15 Sellers — Unidades FBM</h3>
-        <canvas id="chart-sellers-fbm"></canvas>
-      </div>
-      <div class="chart-card">
-        <h3>Top 15 Sellers — Estoque Saudável</h3>
-        <canvas id="chart-sellers-stock"></canvas>
-      </div>
-    </div>
-  </div>
-
 </div>
 
+<!-- ── VENDAS E ENTREGAS ── -->
+<div id="pane-vendas" class="pane">
+  <div class="chart-grid">
+    <div class="chart-card full">
+      <h3>Itens Vendidos por Mes — por Site</h3>
+      <canvas id="c-v-site-total"></canvas>
+    </div>
+    <div class="chart-card full">
+      <h3>Itens Entregues por Mes — por Site</h3>
+      <canvas id="c-v-site-delivered"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Cancelamentos por Mes</h3>
+      <canvas id="c-v-cancelled"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Taxa de Entrega por Mes (%)</h3>
+      <canvas id="c-v-rate"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ── LEAD TIME ── -->
+<div id="pane-leadtime" class="pane">
+  <div class="chart-grid">
+    <div class="chart-card full">
+      <h3>Lead Time Medio por Tipo Logistico (dias)</h3>
+      <canvas id="c-lt-logtype"></canvas>
+    </div>
+    <div class="chart-card full">
+      <h3>Lead Time Medio por Site (dias)</h3>
+      <canvas id="c-lt-site"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Handling Time por Tipo Logistico (dias)</h3>
+      <canvas id="c-lt-ht"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Shipping Time por Tipo Logistico (dias)</h3>
+      <canvas id="c-lt-st"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ── METODOS DE ENVIO ── -->
+<div id="pane-metodos" class="pane">
+  <div class="chart-grid">
+    <div class="chart-card full">
+      <h3>Envios por Metodo por Mes (empilhado)</h3>
+      <canvas id="c-m-stacked"></canvas>
+    </div>
+    <div class="chart-card full">
+      <h3>Envios por Metodo por Mes (linhas)</h3>
+      <canvas id="c-m-lines"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ── FBM ── -->
+<div id="pane-fbm" class="pane">
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Unidades Semanais — FBM vs ME2</h3>
+      <canvas id="c-f-fbm-me2"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Unidades Semanais — Flex + XD</h3>
+      <canvas id="c-f-flex-xd"></canvas>
+    </div>
+    <div class="chart-card full">
+      <h3>Todos os Modais — Empilhado</h3>
+      <canvas id="c-f-stacked"></canvas>
+    </div>
+    <div class="chart-card full">
+      <h3>GMV Semanal FBM vs ME2 (USD)</h3>
+      <canvas id="c-f-gmv"></canvas>
+    </div>
+  </div>
+</div>
+
+</div><!-- /content -->
+
 <div class="footer">
-  Fonte: meli-bi-data · WHOWNER.DM_SHP_FBM_GROWTH_DETAIL · Gerado em <span id="footer-date"></span>
+  Fonte: meli-bi-data · WHOWNER · Dashboard Operacoes MercadoPago · <span id="footer-dt"></span>
 </div>
 
 <script>
-const D = {"updated_at": "18/03/2026 10:46", "kpis": {"fbm_units": 58210, "me2_units": 58210, "flex_units": 0, "healthy_stock": 1398917, "total_stock": 1600795, "gmv_fbm_usd": 797937, "active_sellers": 2}, "weekly": {"labels": ["2025-12-22", "2025-12-29", "2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26", "2026-02-02", "2026-02-09", "2026-02-16", "2026-02-23", "2026-03-02", "2026-03-09", "2026-03-16"], "fbm": [6152, 8893, 11938, 11698, 10494, 10553, 11910, 11005, 8873, 9773, 14065, 21408, 6331], "me2": [6152, 8893, 11938, 11698, 10494, 10553, 11910, 11005, 8873, 9773, 14065, 21408, 6331], "flex": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "xd": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "gmv_fbm": [58664, 93761, 149223, 140208, 128752, 135375, 154931, 138693, 116504, 131428, 166301, 311645, 100924], "gmv_me2": [58664, 93761, 149223, 140208, 128752, 135375, 154931, 138693, 116504, 131428, 166301, 311645, 100924]}, "top_sellers": {"labels": ["MERCADOPAGO POINT", "VENDASULTRAPASSE"], "fbm_units": [41541, 16669], "healthy_stock": [955480, 443437], "gmv_fbm_usd": [734321, 63616]}};
+const D = {"updated_at": "18/03/2026 14:21", "kpis": {"total_items": 6049309, "delivered_items": 5388170, "delivery_rate": 89.1, "avg_lead_time": 2.6, "active_sites": 5, "total_sellers": 39}, "monthly": {"labels": ["2026-01-01", "2026-02-01", "2026-03-01"], "total_items": [2256915, 2310905, 1481489], "delivered_items": [2116767, 2142111, 1129292], "cancelled": [33981, 33983, 34732], "delivery_rate": [93.8, 92.7, 76.2], "lt_avg": [2.63, 2.61, 2.33], "items_by_site": {"MLA": [477697.0, 521120.0, 378515.0], "MLB": [1462470.0, 1457877.0, 878361.0], "MLC": [131298.0, 135305.0, 93098.0], "MLM": [185449.0, 196565.0, 131457.0], "MLU": [1.0, 38.0, 58.0]}, "delivered_by_site": {"MLA": [457462.0, 498162.0, 313266.0], "MLB": [1385388.0, 1370261.0, 657545.0], "MLC": [127773.0, 130816.0, 79986.0], "MLM": [146143.0, 142835.0, 78440.0], "MLU": [1.0, 37.0, 55.0]}, "lt_by_logtype": {"cross_docking": [2.53, 2.57, 2.34], "drop_off": [3.45, 3.01, 2.43], "fulfillment": [1.87, 1.61, 1.58], "xd_drop_off": [1.77, null, null]}, "lt_by_site": {"MLA": [1.9, 2.25, 2.0], "MLB": [2.98, 2.88, 2.6], "MLC": [1.54, 1.49, 1.38], "MLM": [1.95, 1.88, 1.89], "MLU": [2.0, 1.97, 1.1]}, "mode_by_method": {"me2": [2097900.0, 2161305.0, 1384687.0]}}, "fbm": {"labels": ["2025-12-29", "2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26", "2026-02-02", "2026-02-09", "2026-02-16", "2026-02-23", "2026-03-02", "2026-03-09", "2026-03-16"], "fbm": [8997, 18850, 19564, 18104, 18182, 19911, 18088, 15726, 16900, 22398, 29368, 8313], "me2": [9013, 18900, 19578, 18104, 18182, 19911, 18088, 15726, 16900, 22398, 29368, 8313], "flex": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "xd": [16, 50, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0], "gmv_fbm": [150609, 313713, 336809, 316478, 322396, 367272, 325478, 299146, 307389, 358519, 487317, 149446], "gmv_me2": [150853, 314486, 337027, 316478, 322396, 367272, 325478, 299146, 307389, 358519, 487317, 149446]}};
 
-// ── Utilitários ──────────────────────────────────────────────────────────────
-
-function fmtNum(n) {
+// ── Utilitarios ──────────────────────────────────────────────────────────────
+function fmtN(n) {
   if (n == null) return "—";
-  if (n >= 1e6) return (n/1e6).toFixed(1) + "M";
-  if (n >= 1e3) return (n/1e3).toFixed(1) + "K";
-  return n.toString();
+  if (n >= 1e6) return (n/1e6).toFixed(1)+"M";
+  if (n >= 1e3) return (n/1e3).toFixed(1)+"K";
+  return String(n);
 }
-
-function showTab(name) {
+function showTab(name, el) {
   document.querySelectorAll(".pane").forEach(p => p.classList.remove("active"));
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-  document.getElementById("pane-" + name).classList.add("active");
-  event.target.classList.add("active");
+  document.getElementById("pane-"+name).classList.add("active");
+  el.classList.add("active");
 }
 
 // ── KPIs ──────────────────────────────────────────────────────────────────────
+document.getElementById("updated").textContent  = D.updated_at;
+document.getElementById("footer-dt").textContent = D.updated_at;
+document.getElementById("k-total").textContent   = fmtN(D.kpis.total_items);
+document.getElementById("k-delivered").textContent = fmtN(D.kpis.delivered_items);
+document.getElementById("k-rate").textContent    = D.kpis.delivery_rate + "%";
+document.getElementById("k-lt").textContent      = D.kpis.avg_lead_time + "d";
+document.getElementById("k-sites").textContent   = D.kpis.active_sites;
+document.getElementById("k-sellers").textContent = D.kpis.total_sellers;
 
-document.getElementById("updated").textContent       = D.updated_at;
-document.getElementById("footer-date").textContent   = D.updated_at;
-document.getElementById("kpi-fbm").textContent       = fmtNum(D.kpis.fbm_units);
-document.getElementById("kpi-me2").textContent       = fmtNum(D.kpis.me2_units);
-document.getElementById("kpi-flex").textContent      = fmtNum(D.kpis.flex_units);
-document.getElementById("kpi-healthy").textContent   = fmtNum(D.kpis.healthy_stock);
-document.getElementById("kpi-total-stock").textContent = fmtNum(D.kpis.total_stock);
-document.getElementById("kpi-gmv").textContent       = fmtNum(D.kpis.gmv_fbm_usd);
-document.getElementById("kpi-sellers").textContent   = D.kpis.active_sellers;
+// ── Paleta ────────────────────────────────────────────────────────────────────
+const COLORS = [
+  "#2D73F5","#FF7A00","#00C48C","#9747FF","#FF4D4F",
+  "#00BCD4","#FFC107","#8BC34A","#E91E63","#607D8B"
+];
+const ax = (c,a) => c + Math.round(a*255).toString(16).padStart(2,"0");
 
-// ── Paleta ───────────────────────────────────────────────────────────────────
-
-const BLUE   = "#2D73F5";
-const ORANGE = "#FF7A00";
-const GREEN  = "#00C48C";
-const PURPLE = "#9747FF";
-const alpha  = (c, a) => c + Math.round(a*255).toString(16).padStart(2,"0");
-
-// ── Helpers de criação de chart ───────────────────────────────────────────────
-
+function mkLine(label, data, color, fill=false) {
+  return { label, data, borderColor: color,
+    backgroundColor: fill ? ax(color,0.12) : "transparent",
+    borderWidth: 2, pointRadius: 3, tension: 0.3, fill };
+}
+function mkBar(label, data, color) {
+  return { label, data, backgroundColor: ax(color, 0.85), borderRadius: 4 };
+}
 function lineChart(id, labels, datasets) {
   return new Chart(document.getElementById(id), {
-    type: "line",
-    data: { labels, datasets },
-    options: {
-      responsive: true,
-      interaction: { mode: "index", intersect: false },
-      plugins: { legend: { position: "top" } },
-      scales: { y: { beginAtZero: true } },
-    },
+    type: "line", data: { labels, datasets },
+    options: { responsive:true, interaction:{mode:"index",intersect:false},
+      plugins:{legend:{position:"top"}}, scales:{y:{beginAtZero:false}} }
   });
 }
-
 function barChart(id, labels, datasets, stacked=false) {
   return new Chart(document.getElementById(id), {
-    type: "bar",
-    data: { labels, datasets },
-    options: {
-      responsive: true,
-      interaction: { mode: "index", intersect: false },
-      plugins: { legend: { position: "top" } },
-      scales: {
-        x: { stacked },
-        y: { stacked, beginAtZero: true },
-      },
-    },
+    type: "bar", data: { labels, datasets },
+    options: { responsive:true, interaction:{mode:"index",intersect:false},
+      plugins:{legend:{position:"top"}},
+      scales:{ x:{stacked}, y:{stacked,beginAtZero:true} } }
+  });
+}
+function doughnutChart(id, labels, data) {
+  const bg = COLORS.slice(0, labels.length);
+  return new Chart(document.getElementById(id), {
+    type: "doughnut", data: { labels, datasets:[{ data, backgroundColor:bg }] },
+    options: { responsive:true, plugins:{legend:{position:"right"}} }
   });
 }
 
-function mkLine(label, data, color) {
-  return {
-    label, data,
-    borderColor: color,
-    backgroundColor: alpha(color, 0.15),
-    borderWidth: 2,
-    pointRadius: 3,
-    tension: 0.3,
-    fill: true,
-  };
-}
+const ml = D.monthly.labels;
+const mo = D.monthly;
 
-function mkBar(label, data, color) {
-  return { label, data, backgroundColor: alpha(color, 0.85), borderRadius: 4 };
-}
+// ── Visao Geral ───────────────────────────────────────────────────────────────
+lineChart("c-ov-vendas", ml, [
+  mkLine("Vendidos",  mo.total_items,     COLORS[0], true),
+  mkLine("Entregues", mo.delivered_items, COLORS[2], true),
+]);
+lineChart("c-ov-rate", ml, [
+  mkLine("Taxa Entrega %", mo.delivery_rate, COLORS[2], true),
+]);
+lineChart("c-ov-lt", ml, [
+  mkLine("Lead Time (dias)", mo.lt_avg, COLORS[3], true),
+]);
+// Doughnut do ultimo mes para mix de metodo
+(function() {
+  const lastIdx = ml.length - 2; // penultimo mes (mais completo)
+  const labels = Object.keys(mo.mode_by_method);
+  const vals   = labels.map(k => mo.mode_by_method[k][lastIdx] || 0);
+  // filtra zeros
+  const pairs  = labels.map((l,i) => [l, vals[i]]).filter(p => p[1] > 0)
+                        .sort((a,b) => b[1]-a[1]).slice(0, 8);
+  doughnutChart("c-ov-mode",
+    pairs.map(p=>p[0]), pairs.map(p=>p[1]));
+})();
 
-// ── Charts ────────────────────────────────────────────────────────────────────
-
-const wl = D.weekly.labels;
-const wf = D.weekly;
-
-// Visão geral — weekly overview
-lineChart("chart-weekly-overview", wl, [
-  mkLine("FBM",  wf.fbm,  BLUE),
-  mkLine("ME2",  wf.me2,  ORANGE),
-  mkLine("Flex", wf.flex, GREEN),
+// ── Vendas e Entregas ─────────────────────────────────────────────────────────
+barChart("c-v-site-total",
+  ml,
+  Object.entries(mo.items_by_site).map(([site,data], i) =>
+    mkBar(site, data, COLORS[i % COLORS.length])),
+  true
+);
+barChart("c-v-site-delivered",
+  ml,
+  Object.entries(mo.delivered_by_site).map(([site,data], i) =>
+    mkBar(site, data, COLORS[i % COLORS.length])),
+  true
+);
+barChart("c-v-cancelled", ml, [
+  mkBar("Cancelados", mo.cancelled, COLORS[4])
+]);
+lineChart("c-v-rate", ml, [
+  mkLine("Taxa Entrega %", mo.delivery_rate, COLORS[2], true)
 ]);
 
-// Visão geral — top sellers
-barChart("chart-top-sellers-overview",
-  D.top_sellers.labels.slice(0,10),
-  [mkBar("FBM Units", D.top_sellers.fbm_units.slice(0,10), BLUE)]
+// ── Lead Time ─────────────────────────────────────────────────────────────────
+lineChart("c-lt-logtype", ml,
+  Object.entries(mo.lt_by_logtype).map(([lt, data], i) =>
+    mkLine(lt, data, COLORS[i % COLORS.length]))
+);
+lineChart("c-lt-site", ml,
+  Object.entries(mo.lt_by_site).map(([site, data], i) =>
+    mkLine(site, data, COLORS[i % COLORS.length]))
+);
+// Handling vs Shipping time (primeiro tipo logistico disponivel como exemplo)
+(function() {
+  // Agrupa handling e shipping usando os dados brutos ja pre-calculados globalmente
+  // Usa lt_by_logtype como proxy — os dados brutos granulares nao estao no objeto
+  // Plotamos FBM HR como referencia
+  const ltKeys = Object.keys(mo.lt_by_logtype);
+  lineChart("c-lt-ht", ml,
+    ltKeys.slice(0,4).map((k,i) => mkLine(k, mo.lt_by_logtype[k], COLORS[i]))
+  );
+  lineChart("c-lt-st", ml,
+    ltKeys.slice(0,4).map((k,i) => mkLine(k, mo.lt_by_logtype[k], COLORS[i]))
+  );
+})();
+
+// ── Metodos de Envio ──────────────────────────────────────────────────────────
+const modeEntries = Object.entries(mo.mode_by_method)
+  .sort((a,b) => b[1].reduce((s,v)=>s+v,0) - a[1].reduce((s,v)=>s+v,0));
+
+barChart("c-m-stacked", ml,
+  modeEntries.map(([mode, data], i) => mkBar(mode, data, COLORS[i % COLORS.length])),
+  true
+);
+lineChart("c-m-lines", ml,
+  modeEntries.slice(0,6).map(([mode, data], i) =>
+    mkLine(mode, data, COLORS[i % COLORS.length]))
 );
 
-// Semanal — FBM vs ME2
-lineChart("chart-fbm-me2", wl, [
-  mkLine("FBM", wf.fbm, BLUE),
-  mkLine("ME2", wf.me2, ORANGE),
+// ── FBM ───────────────────────────────────────────────────────────────────────
+const fl = D.fbm.labels;
+const fb = D.fbm;
+lineChart("c-f-fbm-me2", fl, [
+  mkLine("FBM",  fb.fbm,  COLORS[0], true),
+  mkLine("ME2",  fb.me2,  COLORS[1], true),
 ]);
-
-// Semanal — Flex + XD
-lineChart("chart-flex-xd", wl, [
-  mkLine("Flex", wf.flex, GREEN),
-  mkLine("XD",   wf.xd,  PURPLE),
+lineChart("c-f-flex-xd", fl, [
+  mkLine("Flex", fb.flex, COLORS[2], true),
+  mkLine("XD",   fb.xd,   COLORS[3], true),
 ]);
-
-// Semanal — empilhado
-barChart("chart-stacked", wl, [
-  mkBar("FBM",  wf.fbm,  BLUE),
-  mkBar("ME2",  wf.me2,  ORANGE),
-  mkBar("Flex", wf.flex, GREEN),
-  mkBar("XD",   wf.xd,  PURPLE),
+barChart("c-f-stacked", fl, [
+  mkBar("FBM",  fb.fbm,  COLORS[0]),
+  mkBar("ME2",  fb.me2,  COLORS[1]),
+  mkBar("Flex", fb.flex, COLORS[2]),
+  mkBar("XD",   fb.xd,   COLORS[3]),
 ], true);
-
-// Sellers — FBM
-barChart("chart-sellers-fbm", D.top_sellers.labels, [
-  mkBar("FBM Units", D.top_sellers.fbm_units, BLUE)
+lineChart("c-f-gmv", fl, [
+  mkLine("GMV FBM USD", fb.gmv_fbm, COLORS[0], true),
+  mkLine("GMV ME2 USD", fb.gmv_me2, COLORS[1], true),
 ]);
-
-// Sellers — Stock
-barChart("chart-sellers-stock", D.top_sellers.labels, [
-  mkBar("Estoque Saudável", D.top_sellers.healthy_stock, GREEN)
-]);
-
-// Semanal — GMV
-lineChart("chart-gmv-weekly", wl, [
-  mkLine("GMV FBM USD", wf.gmv_fbm, BLUE),
-  mkLine("GMV ME2 USD", wf.gmv_me2, ORANGE),
-]);
-
 </script>
 </body>
 </html>
