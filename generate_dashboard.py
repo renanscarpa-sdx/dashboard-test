@@ -21,7 +21,7 @@ from datetime import datetime
 # ── CONFIGURACAO ──────────────────────────────────────────────────────────────
 
 PROJECT         = "meli-bi-data"
-DASHBOARD_TITLE = "Dashboard Operacoes MercadoPago"
+DASHBOARD_TITLE = "Dashboard InicisSDX"
 DATE_FROM       = "2026-01-01"
 
 MAIN_CUSTS = [
@@ -566,7 +566,7 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 <body>
 
 <div class="header">
-  <h1>MercadoPago — Dashboard Operacoes</h1>
+  <h1>Dashboard InicisSDX</h1>
   <span class="badge">Atualizado: <span id="updated"></span></span>
 </div>
 
