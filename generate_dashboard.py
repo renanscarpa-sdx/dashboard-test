@@ -546,6 +546,7 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 .kpi.c-green  .val{{ color:var(--green); }}
 .kpi.c-orange .val{{ color:var(--orange); }}
 .kpi.c-purple .val{{ color:var(--purple); }}
+.kpi.c-red    .val{{ color:var(--red); }}
 .section-title{{ font-size:.82rem; font-weight:700; color:var(--muted);
                  text-transform:uppercase; letter-spacing:.06em;
                  margin:24px 0 12px; padding-bottom:6px;
@@ -696,6 +697,7 @@ function showTab(name,el){{
 // ── Paleta ────────────────────────────────────────────────────────────────────
 const SITE_COLORS = {{MLB:"#2D73F5",MLA:"#FF7A00",MLC:"#00C48C",MLM:"#9747FF",MLU:"#FF4D4F"}};
 const PICK_COLORS = ["#2D73F5","#FF7A00","#00C48C","#9747FF","#FF4D4F","#607D8B","#FFC107","#8BC34A"];
+const COLORS      = ["#2D73F5","#FF7A00","#00C48C","#9747FF","#FF4D4F","#607D8B","#FFC107","#8BC34A"];
 function sc(site){{ return SITE_COLORS[site]||"#607D8B"; }}
 function ax(c,a){{ return c+Math.round(a*255).toString(16).padStart(2,"0"); }}
 
@@ -703,6 +705,9 @@ function ax(c,a){{ return c+Math.round(a*255).toString(16).padStart(2,"0"); }}
 function mkLine(label,data,c,fill=false){{
   return{{label,data,borderColor:c,backgroundColor:fill?ax(c,0.12):"transparent",
     borderWidth:2,pointRadius:3,tension:0.35,spanGaps:true,fill}};
+}}
+function mkBar(label,data,c){{
+  return{{label,data,backgroundColor:ax(c,0.75),borderColor:c,borderWidth:1}};
 }}
 
 // ── Chart factories ───────────────────────────────────────────────────────────
