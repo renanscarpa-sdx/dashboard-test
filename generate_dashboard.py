@@ -467,7 +467,6 @@ SELECT
 FROM `meli-bi-data.WHOWNER.DM_SHP_FBM_STOCK_QUALITY_FC`
 WHERE CALENDAR_DATE >= '{DATE_FROM}'
   AND CUS_CUST_ID IN ({_CUSTS})
-  AND SIT_SITE_ID IN ({_SITES_GERAL})
 GROUP BY 1, 2
 ORDER BY 1, 3 DESC
 """
@@ -481,7 +480,6 @@ SELECT
 FROM `meli-bi-data.WHOWNER.DM_SHP_FBM_STOCK_QUALITY_FC`
 WHERE CALENDAR_DATE >= '{DATE_FROM}'
   AND CUS_CUST_ID IN ({_CUSTS})
-  AND SIT_SITE_ID IN ({_SITES_GERAL})
 GROUP BY 1, 2
 ORDER BY 1, 3 DESC
 """
@@ -667,7 +665,7 @@ def build_full_data(df_sales, df_lt, df_lt_state, df_nodo, df_warehouse):
 
         lt_by_state = []
         if df_lt_state is not None:
-            sub = df_lt_state[df_lt_state["site"] == site].sort_values("cnt", ascending=False).head(20)
+            sub = df_lt_state[df_lt_state["site"] == site].sort_values("cnt", ascending=False).head(5)
             lt_by_state = [{"state": str(r["state"]), "avg_lt": float(r["avg_lead_time"]), "cnt": int(r["cnt"])}
                            for _, r in sub.iterrows()]
 
