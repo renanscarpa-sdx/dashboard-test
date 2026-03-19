@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Dashboard Estoque MLB — FBM</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --blue:#2D73F5; --orange:#FF7A00; --green:#00C48C; --red:#FF4D4F;
+  --purple:#9747FF; --teal:#00BCD4; --yellow:#FFC107; --lime:#8BC34A;
+  --gray:#607D8B;
+  --bg:#F4F6FA; --card:#FFFFFF; --text:#1A1A2E; --muted:#7A8099; --border:#E8EAEE;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+       background:var(--bg); color:var(--text); }
+.header{ background:var(--blue); color:#fff; padding:16px 28px;
+          display:flex; align-items:center; gap:12px; }
+.header h1{ font-size:1.2rem; font-weight:700; }
+.badge{ background:rgba(255,255,255,.2); border-radius:20px;
+         padding:3px 12px; font-size:.73rem; margin-left:auto; white-space:nowrap; }
+.content{ padding:22px 28px; max-width:1600px; margin:0 auto; }
+.kpi-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+            gap:12px; margin-bottom:22px; }
+.kpi{ background:var(--card); border-radius:10px; padding:16px 18px;
+       box-shadow:0 1px 4px rgba(0,0,0,.07); }
+.kpi .lbl{ font-size:.74rem; color:var(--muted); margin-bottom:5px; }
+.kpi .val{ font-size:1.65rem; font-weight:700; line-height:1; }
+.kpi .sub{ font-size:.71rem; color:var(--muted); margin-top:4px; }
+.kpi.c-blue   .val{ color:var(--blue); }
+.kpi.c-green  .val{ color:var(--green); }
+.kpi.c-orange .val{ color:var(--orange); }
+.kpi.c-purple .val{ color:var(--purple); }
+.kpi.c-red    .val{ color:var(--red); }
+.section-title{ font-size:.82rem; font-weight:700; color:var(--muted);
+                 text-transform:uppercase; letter-spacing:.06em;
+                 margin:28px 0 12px; padding-bottom:6px;
+                 border-bottom:1px solid var(--border); }
+.chart-card{ background:var(--card); border-radius:10px; padding:18px 20px;
+              box-shadow:0 1px 4px rgba(0,0,0,.07); margin-bottom:16px; }
+.chart-card h3{ font-size:.88rem; font-weight:600; margin-bottom:12px; }
+.chart-card canvas{ max-height:320px; }
+.chart-card.tall canvas{ max-height:480px; }
+.chart-card.xtall canvas{ max-height:640px; }
+.footer{ text-align:center; padding:16px; font-size:.71rem; color:var(--muted); margin-top:8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Dashboard Estoque MLB — FBM</h1>
+  <span class="badge">Atualizado: <span id="updated"></span></span>
+</div>
+
+<div class="content">
+
+  <!-- KPIs globais -->
+  <div style="margin-top:20px">
+  <div class="kpi-grid">
+    <div class="kpi c-blue">  <div class="lbl">Total Vendido Point (2026)</div>   <div class="val" id="k-point-sales"></div>  <div class="sub">Outbound acumulado</div></div>
+    <div class="kpi c-purple"><div class="lbl">Total Vendido Ultrapasse (2026)</div><div class="val" id="k-ultra-sales"></div>  <div class="sub">Outbound acumulado</div></div>
+    <div class="kpi c-green"> <div class="lbl">Estoque Total (snapshot)</div>      <div class="val" id="k-stock-total"></div> <div class="sub">Todos os SKUs</div></div>
+    <div class="kpi c-orange"><div class="lbl">Estoque Disponivel</div>            <div class="val" id="k-stock-avail"></div> <div class="sub">Available stock</div></div>
+    <div class="kpi c-red">   <div class="lbl">Estoque Bloqueado</div>             <div class="val" id="k-stock-block"></div> <div class="sub">Quarentena + outros</div></div>
+    <div class="kpi">         <div class="lbl">Warehouses Ativos</div>             <div class="val" id="k-wh-count"></div>   <div class="sub">Com estoque</div></div>
+    <div class="kpi c-blue">  <div class="lbl">Top Warehouse</div>                 <div class="val" style="font-size:1.1rem" id="k-wh-top"></div><div class="sub" id="k-wh-top-pct"></div></div>
+  </div>
+  </div>
+
+  <!-- Grafico 1 -->
+  <div class="section-title">Grafico 1 — Vendas por Mes (Point vs Ultrapasse)</div>
+  <div class="chart-card">
+    <h3>Total de Vendas (Outbound) por Mes — MLB</h3>
+    <canvas id="c1"></canvas>
+  </div>
+
+  <!-- Grafico 2 -->
+  <div class="section-title">Grafico 2 — Detalhamento de Estoque por SKU (snapshot mais recente)</div>
+  <div class="chart-card tall">
+    <h3>Composicao do Estoque por INVENTORY_ID</h3>
+    <canvas id="c2"></canvas>
+  </div>
+
+  <!-- Grafico 3 -->
+  <div class="section-title">Grafico 3 — Distribuicao por Warehouse (% do total)</div>
+  <div class="chart-card xtall">
+    <h3>Estoque Total por Warehouse — % representatividade</h3>
+    <canvas id="c3"></canvas>
+  </div>
+
+</div>
+
+<div class="footer">
+  Fonte: meli-bi-data · WHOWNER.DM_SHP_FBM_STOCK_QUALITY_FC · MLB · a partir de 2026-01-01 · <span id="footer-dt"></span>
+</div>
+
+<script>
+const D = {"updated_at": "19/03/2026 17:46", "sales": {"labels": ["2026-01-01", "2026-02-01", "2026-03-01"], "point": [19001, 23373, 35208], "ultra": [17952, 17322, 11108], "kpis": {"total_point": 77582, "total_ultra": 46382}}, "stock": {"skus": ["BHEI39907", "BHZW22909", "JVUG38431", "KEKJ53768", "MXPN53308", "NEFY38719", "NGMH40323", "QCGO40352", "VLKF40709", "WDUM53222", "EPVM97846"], "types": ["Point", "Point", "Point", "Point", "Point", "Point", "Point", "Point", "Point", "Point", "Ultrapasse"], "series": {"Disponivel": [1076, 4598, 8341, 3714, 2064, 3619, 4194, 1433, 4356, 3074, 24715], "Quarentena": [0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0], "Danificado": [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], "Transferencia": [8, 3088, 948, 183, 126, 85, 460, 352, 537, 1086, 261], "Pend. Fiscal": [0, 1, 3, 1, 2, 3, 9, 0, 4, 0, 4], "Pend. Saida": [67, 596, 403, 105, 26, 119, 150, 82, 262, 77, 277], "Aguard. Remocao": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, "totals": [1085, 8119, 9455, 3974, 2263, 3746, 4673, 1790, 4928, 4320, 25005], "kpis": {"total_stock": 69358, "total_available": 61184, "total_blocked": 8174}}, "warehouse": {"warehouses": ["BRSP19", "BRSP15", "BRSP25", "BRSP18", "BRRC01", "BRSP14", "BRSP02", "BRSP04", "BRRJ02", "BRBA01", "BRPE01", "BRPR01", "BRSC02", "BRDF01", "BRSP24", "BRRS01", "BRSP30", "BRSP10", "BRMG01"], "stocks": [11215, 8394, 8357, 8166, 5664, 5224, 4849, 3780, 3601, 2880, 2703, 2026, 1853, 278, 233, 99, 30, 4, 2], "pcts": [16.2, 12.1, 12.0, 11.8, 8.2, 7.5, 7.0, 5.4, 5.2, 4.2, 3.9, 2.9, 2.7, 0.4, 0.3, 0.1, 0.0, 0.0, 0.0], "kpis": {"total_warehouses": 19, "top_warehouse": "BRSP19", "top_pct": 16.2}}};
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function fmtN(n){
+  if(n==null||n===undefined) return "—";
+  if(n>=1e6) return (n/1e6).toFixed(1)+"M";
+  if(n>=1e3) return (n/1e3).toFixed(1)+"K";
+  return String(n);
+}
+function ax(c,a){ return c+Math.round(a*255).toString(16).padStart(2,"0"); }
+
+const STOCK_COLORS = {
+  "Disponivel":     "#00C48C",
+  "Quarentena":     "#FF7A00",
+  "Danificado":     "#FF4D4F",
+  "Transferencia":  "#2D73F5",
+  "Pend. Fiscal":   "#9747FF",
+  "Pend. Saida":    "#FFC107",
+  "Aguard. Remocao":"#607D8B",
+};
+
+// ── KPIs ──────────────────────────────────────────────────────────────────────
+document.getElementById("updated")       .textContent = D.updated_at;
+document.getElementById("footer-dt")     .textContent = D.updated_at;
+document.getElementById("k-point-sales") .textContent = fmtN(D.sales.kpis.total_point);
+document.getElementById("k-ultra-sales") .textContent = fmtN(D.sales.kpis.total_ultra);
+document.getElementById("k-stock-total") .textContent = fmtN(D.stock.kpis.total_stock);
+document.getElementById("k-stock-avail") .textContent = fmtN(D.stock.kpis.total_available);
+document.getElementById("k-stock-block") .textContent = fmtN(D.stock.kpis.total_blocked);
+document.getElementById("k-wh-count")    .textContent = D.warehouse.kpis.total_warehouses;
+document.getElementById("k-wh-top")      .textContent = D.warehouse.kpis.top_warehouse;
+document.getElementById("k-wh-top-pct")  .textContent = D.warehouse.kpis.top_pct+"% do total";
+
+// ── Grafico 1 — Vendas mensais ────────────────────────────────────────────────
+new Chart(document.getElementById("c1"), {
+  type: "bar",
+  data: {
+    labels: D.sales.labels,
+    datasets: [
+      {
+        label: "Point",
+        data: D.sales.point,
+        backgroundColor: ax("#2D73F5", 0.8),
+        borderColor: "#2D73F5",
+        borderWidth: 1,
+        order: 2,
+      },
+      {
+        label: "Ultrapasse",
+        data: D.sales.ultra,
+        backgroundColor: ax("#9747FF", 0.8),
+        borderColor: "#9747FF",
+        borderWidth: 1,
+        order: 1,
+        type: "line",
+        tension: 0.35,
+        pointRadius: 4,
+        fill: false,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    interaction: { mode: "index", intersect: false },
+    plugins: { legend: { position: "top" } },
+    scales: { y: { beginAtZero: true, title: { display: true, text: "Unidades vendidas" } } }
+  }
+});
+
+// ── Grafico 2 — Estoque por SKU (stacked bar) ─────────────────────────────────
+const stockLabels  = D.stock.types.map((t,i) => D.stock.skus[i]+" ("+t+")");
+const stockSeries  = Object.entries(D.stock.series);
+new Chart(document.getElementById("c2"), {
+  type: "bar",
+  data: {
+    labels: stockLabels,
+    datasets: stockSeries.map(([name, vals]) => ({
+      label: name,
+      data: vals,
+      backgroundColor: ax(STOCK_COLORS[name]||"#607D8B", 0.8),
+      borderColor: STOCK_COLORS[name]||"#607D8B",
+      borderWidth: 1,
+    }))
+  },
+  options: {
+    responsive: true,
+    interaction: { mode: "index", intersect: false },
+    plugins: { legend: { position: "top" } },
+    scales: {
+      x: { stacked: true },
+      y: { stacked: true, beginAtZero: true, title: { display: true, text: "Unidades" } }
+    }
+  }
+});
+
+// ── Grafico 3 — Warehouse % (horizontal bar) ──────────────────────────────────
+const whLabels = D.warehouse.warehouses.map(
+  (w,i) => w+" ("+D.warehouse.pcts[i]+"%)");
+new Chart(document.getElementById("c3"), {
+  type: "bar",
+  data: {
+    labels: whLabels,
+    datasets: [{
+      label: "Estoque total",
+      data: D.warehouse.stocks,
+      backgroundColor: D.warehouse.pcts.map(p =>
+        p >= 10 ? ax("#2D73F5",0.8) : p >= 5 ? ax("#00C48C",0.8) : ax("#607D8B",0.6)),
+      borderWidth: 1,
+    }]
+  },
+  options: {
+    indexAxis: "y",
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => " "+ctx.parsed.x.toLocaleString("pt-BR")+" unid. ("+D.warehouse.pcts[ctx.dataIndex]+"%)"
+        }
+      }
+    },
+    scales: { x: { beginAtZero: true, title: { display: true, text: "Unidades" } } }
+  }
+});
+</script>
+</body>
+</html>
