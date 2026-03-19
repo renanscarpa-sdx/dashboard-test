@@ -1,0 +1,41 @@
+name: Atualizar Dashboards
+
+on:
+  schedule:
+    - cron: '0 12 * * *'   # 09:00 BRT (UTC-3) todos os dias
+  workflow_dispatch:         # permite rodar manualmente pelo GitHub
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install google-cloud-bigquery db-dtypes pandas
+
+      - name: Autenticar no Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Gerar dashboard principal (index.html)
+        run: python generate_dashboard.py
+
+      - name: Gerar dashboard de estoque (dashboard_estoque.html)
+        run: python generate_stock_dashboard.py
+
+      - name: Commit e push dos HTMLs atualizados
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html dashboard_estoque.html
+          git diff --staged --quiet || git commit -m "chore: auto-update dashboards $(date +'%Y-%m-%d %H:%M BRT')"
+          git push
