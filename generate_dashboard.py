@@ -347,6 +347,145 @@ GROUP BY 1, 2
 ORDER BY 1, 3 DESC
 """
 
+# ── QUERIES — ABA 5: FULL (Fulfillment) ──────────────────────────────────────
+
+QUERY_FULL_SALES = f"""
+WITH base AS (
+  SELECT
+    DATE_TRUNC(DATE(ORDER_DATE), MONTH)                       AS month,
+    SIT_SITE_ID,
+    FLAG_DELIVERED                                            AS delivered_flag,
+    COALESCE(Q_DEVICES, 1)                                    AS items
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS_MLB`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SHP_PICKING_TYPE_ID = 'fulfillment'
+  UNION ALL
+  SELECT
+    DATE_TRUNC(DATE(ORDER_DATE), MONTH),
+    SIT_SITE_ID,
+    FLAG_DELIVERED,
+    COALESCE(Q_DEVICES, 1)
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SIT_SITE_ID IN ({_SITES_GERAL})
+    AND SHP_PICKING_TYPE_ID = 'fulfillment'
+)
+SELECT
+  month,
+  SIT_SITE_ID                                                 AS site,
+  COUNT(*)                                                    AS total_orders,
+  SUM(items)                                                  AS total_items,
+  COUNTIF(delivered_flag = 1)                                 AS delivered_orders,
+  SUM(CASE WHEN delivered_flag = 1 THEN items ELSE 0 END)     AS delivered_items
+FROM base
+GROUP BY 1, 2
+ORDER BY 1, 2
+"""
+
+QUERY_FULL_LT = f"""
+WITH base AS (
+  SELECT
+    DATE_TRUNC(DATE(ORDER_DATE), MONTH)                       AS month,
+    SIT_SITE_ID,
+    LEAD_TIME_DIAS_HABILES                                    AS lead_time_days
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS_MLB`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SHP_PICKING_TYPE_ID = 'fulfillment'
+    AND FLAG_DELIVERED = 1
+    AND LEAD_TIME_DIAS_HABILES > 0
+    AND LEAD_TIME_DIAS_HABILES < 30
+  UNION ALL
+  SELECT
+    DATE_TRUNC(DATE(ORDER_DATE), MONTH),
+    SIT_SITE_ID,
+    LEAD_TIME_DIAS_HABILES
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SIT_SITE_ID IN ({_SITES_GERAL})
+    AND SHP_PICKING_TYPE_ID = 'fulfillment'
+    AND FLAG_DELIVERED = 1
+    AND LEAD_TIME_DIAS_HABILES > 0
+    AND LEAD_TIME_DIAS_HABILES < 30
+)
+SELECT
+  month,
+  SIT_SITE_ID                                                 AS site,
+  ROUND(AVG(lead_time_days), 2)                               AS avg_lead_time,
+  COUNT(*)                                                    AS cnt
+FROM base
+GROUP BY 1, 2
+ORDER BY 1, 2
+"""
+
+QUERY_FULL_LT_STATE = f"""
+WITH base AS (
+  SELECT
+    SIT_SITE_ID,
+    COALESCE(NULLIF(TRIM(SHP_ADD_STATE_NAME), ''), 'unknown') AS state,
+    LEAD_TIME_DIAS_HABILES                                    AS lead_time_days
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS_MLB`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SHP_PICKING_TYPE_ID = 'fulfillment'
+    AND FLAG_DELIVERED = 1
+    AND LEAD_TIME_DIAS_HABILES > 0
+    AND LEAD_TIME_DIAS_HABILES < 30
+  UNION ALL
+  SELECT
+    SIT_SITE_ID,
+    COALESCE(NULLIF(TRIM(SHP_ADD_STATE_NAME), ''), 'unknown'),
+    LEAD_TIME_DIAS_HABILES
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SIT_SITE_ID IN ({_SITES_GERAL})
+    AND SHP_PICKING_TYPE_ID = 'fulfillment'
+    AND FLAG_DELIVERED = 1
+    AND LEAD_TIME_DIAS_HABILES > 0
+    AND LEAD_TIME_DIAS_HABILES < 30
+)
+SELECT
+  SIT_SITE_ID                                                 AS site,
+  state,
+  ROUND(AVG(lead_time_days), 2)                               AS avg_lead_time,
+  COUNT(*)                                                    AS cnt
+FROM base
+GROUP BY 1, 2
+ORDER BY 1, 4 DESC
+"""
+
+QUERY_FULL_NODO = f"""
+SELECT
+  SIT_SITE_ID                                                 AS site,
+  COALESCE(NULLIF(TRIM(TIPO_NODO_DESAG), ''), 'unknown')      AS tipo_nodo,
+  SUM(OUTBOUND)                                               AS total_outbound,
+  COUNT(DISTINCT INVENTORY_ID)                                AS skus
+FROM `meli-bi-data.WHOWNER.DM_SHP_FBM_STOCK_QUALITY_FC`
+WHERE CALENDAR_DATE >= '{DATE_FROM}'
+  AND CUS_CUST_ID IN ({_CUSTS})
+  AND SIT_SITE_ID IN ({_SITES_GERAL})
+GROUP BY 1, 2
+ORDER BY 1, 3 DESC
+"""
+
+QUERY_FULL_WAREHOUSE = f"""
+SELECT
+  SIT_SITE_ID                                                 AS site,
+  COALESCE(NULLIF(TRIM(WAREHOUSE_ID), ''), 'unknown')         AS warehouse_id,
+  SUM(OUTBOUND)                                               AS total_outbound,
+  COUNT(DISTINCT INVENTORY_ID)                                AS skus
+FROM `meli-bi-data.WHOWNER.DM_SHP_FBM_STOCK_QUALITY_FC`
+WHERE CALENDAR_DATE >= '{DATE_FROM}'
+  AND CUS_CUST_ID IN ({_CUSTS})
+  AND SIT_SITE_ID IN ({_SITES_GERAL})
+GROUP BY 1, 2
+ORDER BY 1, 3 DESC
+"""
+
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
 def run_query(client: bigquery.Client, sql: str, label: str) -> pd.DataFrame:
@@ -502,6 +641,75 @@ def build_sla_data(df_sla: pd.DataFrame, df_motivos: pd.DataFrame) -> dict:
     }
 
 
+# ── MONTAGEM — FULL (Fulfillment) ────────────────────────────────────────────
+
+def build_full_data(df_sales, df_lt, df_lt_state, df_nodo, df_warehouse):
+    df_sales = df_sales.copy()
+    df_lt    = df_lt.copy()
+    df_sales["month"] = df_sales["month"].astype(str)
+    df_lt["month"]    = df_lt["month"].astype(str)
+
+    all_months = sorted(df_sales["month"].unique())
+    all_sites  = sorted(df_sales["site"].unique())
+
+    by_site = {}
+    for site in all_sites:
+        s  = df_sales[df_sales["site"] == site].set_index("month")
+        lt = df_lt[df_lt["site"] == site]
+
+        sent      = [int(s.loc[m, "total_items"])    if m in s.index else 0 for m in all_months]
+        delivered = [int(s.loc[m, "delivered_items"]) if m in s.index else 0 for m in all_months]
+
+        lt_avg = []
+        for m in all_months:
+            sub = lt[lt["month"] == m]
+            lt_avg.append(wavg(sub, "avg_lead_time", "cnt") if len(sub) > 0 else None)
+
+        lt_by_state = []
+        if df_lt_state is not None:
+            sub = df_lt_state[df_lt_state["site"] == site].sort_values("cnt", ascending=False).head(20)
+            lt_by_state = [{"state": str(r["state"]), "avg_lt": float(r["avg_lead_time"]), "cnt": int(r["cnt"])}
+                           for _, r in sub.iterrows()]
+
+        tipo_nodo = []
+        if df_nodo is not None:
+            sub = df_nodo[df_nodo["site"] == site].sort_values("total_outbound", ascending=False)
+            tipo_nodo = [{"label": str(r["tipo_nodo"]), "val": int(r["total_outbound"]), "skus": int(r["skus"])}
+                         for _, r in sub.iterrows()]
+
+        warehouse = []
+        if df_warehouse is not None:
+            sub = df_warehouse[df_warehouse["site"] == site].sort_values("total_outbound", ascending=False).head(20)
+            warehouse = [{"label": str(r["warehouse_id"]), "val": int(r["total_outbound"]), "skus": int(r["skus"])}
+                         for _, r in sub.iterrows()]
+
+        by_site[site] = {
+            "sent":         sent,
+            "delivered":    delivered,
+            "lead_time":    lt_avg,
+            "lt_by_state":  lt_by_state,
+            "tipo_nodo":    tipo_nodo,
+            "warehouse":    warehouse,
+        }
+
+    total_sent = int(df_sales["total_items"].sum())
+    total_del  = int(df_sales["delivered_items"].sum())
+    overall_lt = wavg(df_lt, "avg_lead_time", "cnt") or 0
+
+    return {
+        "labels":  all_months,
+        "sites":   all_sites,
+        "by_site": by_site,
+        "kpis": {
+            "total_sent":      total_sent,
+            "total_delivered": total_del,
+            "delivery_rate":   round(total_del / max(total_sent, 1) * 100, 1),
+            "avg_lead_time":   overall_lt,
+            "active_sites":    len(all_sites),
+        },
+    }
+
+
 # ── HTML TEMPLATE ─────────────────────────────────────────────────────────────
 
 HTML_TEMPLATE = """\
@@ -575,6 +783,7 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   <div class="tab"        onclick="showTab('cards',  this)">Visao Geral Cards</div>
   <div class="tab"        onclick="showTab('sla3',   this)">Qualidade &amp; SLA — Points</div>
   <div class="tab"        onclick="showTab('sla4',   this)">Qualidade &amp; SLA — Cards</div>
+  <div class="tab"        onclick="showTab('full',   this)">FULL</div>
 </div>
 
 <div class="content">
@@ -675,8 +884,37 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   <div class="chart-grid" id="s4-fv"></div>
 </div>
 
+<!-- ── ABA 5: FULL (Fulfillment) ── -->
+<div id="pane-full" class="pane">
+  <div class="kpi-grid">
+    <div class="kpi c-blue">  <div class="lbl">Itens Enviados (2026)</div>    <div class="val" id="f-k-sent"></div>  <div class="sub">SHP_PICKING_TYPE = fulfillment</div></div>
+    <div class="kpi c-green"> <div class="lbl">Itens Entregues (2026)</div>   <div class="val" id="f-k-del"></div>   <div class="sub">FLAG_DELIVERED = 1</div></div>
+    <div class="kpi c-orange"><div class="lbl">Taxa de Entrega</div>           <div class="val" id="f-k-rate"></div>  <div class="sub">Entregues / Enviados</div></div>
+    <div class="kpi c-purple"><div class="lbl">Lead Time Medio</div>           <div class="val" id="f-k-lt"></div>    <div class="sub">Dias habeis (entregues)</div></div>
+    <div class="kpi">         <div class="lbl">Paises Ativos</div>             <div class="val" id="f-k-sites"></div> <div class="sub">Sites com dados 2026</div></div>
+  </div>
+  <div class="section-title">Grafico 1 — Itens Enviados por Fulfillment por Mes (por Pais)</div>
+  <div class="chart-grid cols-1">
+    <div class="chart-card"><h3>Itens Enviados — Fulfillment</h3><canvas id="f-c1"></canvas></div>
+  </div>
+  <div class="section-title">Grafico 2 — Itens Entregues por Fulfillment por Mes (por Pais)</div>
+  <div class="chart-grid cols-1">
+    <div class="chart-card"><h3>Itens Entregues — Fulfillment</h3><canvas id="f-c2"></canvas></div>
+  </div>
+  <div class="section-title">Grafico 3 — Lead Time Medio por Mes (por Pais)</div>
+  <div class="chart-grid cols-1">
+    <div class="chart-card"><h3>Lead Time Medio — Fulfillment (Dias Habeis)</h3><canvas id="f-c3"></canvas></div>
+  </div>
+  <div class="section-title">Grafico 4 — Lead Time por Estado de Destino (por Pais)</div>
+  <div class="chart-grid" id="f-c4"></div>
+  <div class="section-title">Grafico 5 — Tipo de Armazem (TIPO_NODO_DESAG) por Pais</div>
+  <div class="chart-grid" id="f-c5"></div>
+  <div class="section-title">Grafico 6 — Origem do Armazem (WAREHOUSE_ID) por Pais</div>
+  <div class="chart-grid" id="f-c6"></div>
+</div>
+
 </div><!-- /content -->
-<div class="footer">Fonte: meli-bi-data · SBOX_OPER_MP · a partir de {date_from} · <span id="footer-dt"></span></div>
+<div class="footer">Fonte: meli-bi-data · SBOX_OPER_MP · WHOWNER · a partir de {date_from} · <span id="footer-dt"></span></div>
 
 <script>
 const D = {data_json};
@@ -851,6 +1089,60 @@ function renderSlaTab(P, D){{
   }});
 }}
 
+// ── FULL tab ──────────────────────────────────────────────────────────────────
+function renderFullTab(D){{
+  const ml = D.labels, sites = D.sites, bs = D.by_site;
+
+  // KPIs
+  document.getElementById("f-k-sent") .textContent = fmtN(D.kpis.total_sent);
+  document.getElementById("f-k-del")  .textContent = fmtN(D.kpis.total_delivered);
+  document.getElementById("f-k-rate") .textContent = D.kpis.delivery_rate+"%";
+  document.getElementById("f-k-lt")   .textContent = D.kpis.avg_lead_time+"d";
+  document.getElementById("f-k-sites").textContent = D.kpis.active_sites;
+
+  // Grafico 1 — enviados
+  lineChart("f-c1", ml, sites.map(s=>mkLine(s, bs[s].sent,      sc(s))), "Itens");
+  // Grafico 2 — entregues
+  lineChart("f-c2", ml, sites.map(s=>mkLine(s, bs[s].delivered, sc(s))), "Itens");
+  // Grafico 3 — lead time
+  lineChart("f-c3", ml, sites.map(s=>mkLine(s, bs[s].lead_time, sc(s))), "Dias habeis");
+
+  // Grafico 4 — LT por estado (hbar por pais)
+  const c4 = document.getElementById("f-c4");
+  sites.forEach(site => {{
+    const data = bs[site].lt_by_state;
+    if(!data.length) return;
+    const card = mkCard(c4, "Lead Time por Estado — "+site);
+    card.querySelector("canvas").style.maxHeight = "400px";
+    hbarChartEl(card.querySelector("canvas"),
+      data.map(d=>d.state).reverse(),
+      [mkBar("Dias habeis", data.map(d=>d.avg_lt).reverse(), sc(site))]);
+  }});
+
+  // Grafico 5 — tipo_nodo (hbar por pais)
+  const c5 = document.getElementById("f-c5");
+  sites.forEach(site => {{
+    const data = bs[site].tipo_nodo;
+    if(!data.length) return;
+    const card = mkCard(c5, "Tipo Armazem — "+site);
+    hbarChartEl(card.querySelector("canvas"),
+      data.map(d=>d.label).reverse(),
+      [mkBar("Outbound", data.map(d=>d.val).reverse(), sc(site))]);
+  }});
+
+  // Grafico 6 — warehouse (hbar por pais)
+  const c6 = document.getElementById("f-c6");
+  sites.forEach(site => {{
+    const data = bs[site].warehouse;
+    if(!data.length) return;
+    const card = mkCard(c6, "Warehouse ID — "+site);
+    card.querySelector("canvas").style.maxHeight = "400px";
+    hbarChartEl(card.querySelector("canvas"),
+      data.map(d=>d.label).reverse(),
+      [mkBar("Outbound", data.map(d=>d.val).reverse(), sc(site))]);
+  }});
+}}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.getElementById("updated")  .textContent = D.updated_at;
 document.getElementById("footer-dt").textContent = D.updated_at;
@@ -861,6 +1153,7 @@ renderTab("p", D.points);
 renderTab("c", D.cards);
 renderSlaTab("s3", D.sla_points);
 renderSlaTab("s4", D.sla_cards);
+renderFullTab(D.full);
 </script>
 </body>
 </html>
@@ -869,13 +1162,14 @@ renderSlaTab("s4", D.sla_cards);
 
 # ── GERAR HTML ────────────────────────────────────────────────────────────────
 
-def generate_html(points_data, cards_data, sla_points, sla_cards, title, output="index.html"):
+def generate_html(points_data, cards_data, sla_points, sla_cards, full_data, title, output="index.html"):
     payload = {
         "updated_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "points":     points_data,
         "cards":      cards_data,
         "sla_points": sla_points,
         "sla_cards":  sla_cards,
+        "full":       full_data,
     }
     data_json = json.dumps(payload, ensure_ascii=False, default=str)
     html = HTML_TEMPLATE.format(title=title, data_json=data_json, date_from=DATE_FROM)
@@ -906,14 +1200,22 @@ def main():
     df_c_sla    = run_query(client, QUERY_CARDS_SLA,     "cards-sla")
     df_c_motivos= run_query(client, QUERY_CARDS_MOTIVOS, "cards-motivos")
 
+    print("\n[ABA 5] FULL (Fulfillment)...")
+    df_f_sales    = run_query(client, QUERY_FULL_SALES,    "full-vendas")
+    df_f_lt       = run_query(client, QUERY_FULL_LT,       "full-leadtime")
+    df_f_lt_state = run_query(client, QUERY_FULL_LT_STATE, "full-lt-estado")
+    df_f_nodo     = run_query(client, QUERY_FULL_NODO,     "full-nodo")
+    df_f_warehouse= run_query(client, QUERY_FULL_WAREHOUSE,"full-warehouse")
+
     print("\nMontando dados...")
     points_data = build_tab_data(df_p_sales, df_p_lt)
     cards_data  = build_tab_data(df_c_sales, df_c_lt)
     sla_points  = build_sla_data(df_p_sla, df_p_motivos)
     sla_cards   = build_sla_data(df_c_sla, df_c_motivos)
+    full_data   = build_full_data(df_f_sales, df_f_lt, df_f_lt_state, df_f_nodo, df_f_warehouse)
 
     print("Gerando HTML...")
-    generate_html(points_data, cards_data, sla_points, sla_cards, DASHBOARD_TITLE)
+    generate_html(points_data, cards_data, sla_points, sla_cards, full_data, DASHBOARD_TITLE)
 
     print("\nPara publicar:")
     print("  git add index.html && git commit -m 'abas 3 e 4 SLA' && git push")
