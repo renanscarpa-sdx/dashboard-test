@@ -33,10 +33,11 @@ MAIN_CUSTS = [
     1056155455, 1059132973, 1021060004, 2295006693, 193054976,
     537991631, 713184976, 713183870, 713189102, 614858404,
     465005594, 2954307253, 2640089931, 3149449085,
+    1440191315, 1584758630,   # Cards MLM
 ]
 _CUSTS              = ", ".join(str(c) for c in MAIN_CUSTS)
 _SITES_GERAL        = "'MLA', 'MLC', 'MLM', 'MLU'"   # Points & Others
-_SITES_GERAL_CARDS  = "'MLA', 'MLC', 'MLU'"           # Cards (MLM sem dados)
+_SITES_GERAL_CARDS  = "'MLA', 'MLC', 'MLM', 'MLU'"    # Cards (inclui MLM)
 
 # ── QUERIES — ABA 1: Points & Others ─────────────────────────────────────────
 
