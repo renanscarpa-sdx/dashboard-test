@@ -66,6 +66,13 @@ body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     <div class="kpi">         <div class="lbl">Warehouses Ativos</div>             <div class="val" id="k-wh-count"></div>   <div class="sub">Com estoque</div></div>
     <div class="kpi c-blue">  <div class="lbl">Top Warehouse</div>                 <div class="val" style="font-size:1.1rem" id="k-wh-top"></div><div class="sub" id="k-wh-top-pct"></div></div>
   </div>
+  <div style="margin-top:12px">
+  <div class="kpi-grid">
+    <div class="kpi c-red">   <div class="lbl">Menor Cobertura</div>   <div class="val" id="k-ss-critical-days"></div><div class="sub" id="k-ss-critical-prod"></div></div>
+    <div class="kpi c-green"> <div class="lbl">Maior Cobertura</div>   <div class="val" id="k-ss-best-days"></div>   <div class="sub" id="k-ss-best-prod"></div></div>
+    <div class="kpi c-orange"><div class="lbl">Cobertura Media</div>   <div class="val" id="k-ss-avg-days"></div>    <div class="sub">Media entre produtos</div></div>
+  </div>
+  </div>
   </div>
 
   <!-- Grafico 1 -->
@@ -89,6 +96,13 @@ body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     <canvas id="c3"></canvas>
   </div>
 
+  <!-- Grafico 4 -->
+  <div class="section-title">Grafico 4 — Estoque de Seguranca (Dias de Cobertura)</div>
+  <div class="chart-card tall">
+    <h3>Dias de Estoque Disponivel vs Media de Vendas Diarias (ultimos 60 dias)</h3>
+    <canvas id="c4"></canvas>
+  </div>
+
 </div>
 
 <div class="footer">
@@ -96,7 +110,7 @@ body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 </div>
 
 <script>
-const D = {"updated_at": "20/03/2026 08:25", "sales": {"labels": ["2026-01-01", "2026-02-01", "2026-03-01"], "point": [19001, 23373, 37209], "ultra": [17952, 17322, 11716], "kpis": {"total_point": 79583, "total_ultra": 46990}}, "stock": {"skus": ["Smart 2 Tim", "Mini BT", "Pro3 Vivo", "Air 2 Claro", "Air 2 Tim", "Smart 2 Vivo", "Pro3 Tim", "Smart 2 Claro", "Pro3 Claro", "Air 2 Vivo", "Ultrapasse"], "types": ["Point", "Point", "Point", "Point", "Point", "Point", "Point", "Point", "Point", "Point", "Ultrapasse"], "series": {"Disponivel": [1056, 6510, 8257, 3768, 2132, 3578, 3934, 1382, 4122, 3606, 24130], "Quarentena": [0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0], "Danificado": [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], "Transferencia": [312, 2972, 1812, 138, 103, 547, 785, 526, 1305, 886, 207], "Pend. Fiscal": [1, 3, 3, 0, 3, 2, 1, 0, 2, 1, 2], "Pend. Saida": [59, 543, 309, 86, 22, 110, 149, 71, 245, 71, 289], "Aguard. Remocao": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, "totals": [1508, 12070, 11097, 3912, 2241, 4311, 4752, 2073, 5670, 5090, 24453], "kpis": {"total_stock": 77177, "total_available": 62475, "total_blocked": 14702}}, "warehouse": {"warehouses": ["BRSP19", "BRSP15", "BRSP18", "BRSP25", "BRSP14", "BRSP04", "BRSP02", "BRRJ02", "BRBA01", "BRPE01", "BRSC02", "BRPR01", "BRRC01", "BRDF01", "BRSP24", "BRRS01", "BRSP30", "BRSP10", "BRMG01"], "stocks": [13405, 9812, 9589, 8873, 7071, 5373, 4993, 4829, 3868, 3124, 2353, 2105, 1068, 287, 263, 131, 27, 4, 2], "pcts": [17.4, 12.7, 12.4, 11.5, 9.2, 7.0, 6.5, 6.3, 5.0, 4.0, 3.0, 2.7, 1.4, 0.4, 0.3, 0.2, 0.0, 0.0, 0.0], "kpis": {"total_warehouses": 19, "top_warehouse": "BRSP19", "top_pct": 17.4}}};
+const D = {"updated_at": "20/03/2026 08:40", "sales": {"labels": ["2026-01-01", "2026-02-01", "2026-03-01"], "point": [19001, 23373, 37209], "ultra": [17952, 17322, 11716], "kpis": {"total_point": 79583, "total_ultra": 46990}}, "stock": {"skus": ["Smart 2 Tim", "Mini BT", "Pro3 Vivo", "Air 2 Claro", "Air 2 Tim", "Smart 2 Vivo", "Pro3 Tim", "Smart 2 Claro", "Pro3 Claro", "Air 2 Vivo", "Ultrapasse"], "types": ["Point", "Point", "Point", "Point", "Point", "Point", "Point", "Point", "Point", "Point", "Ultrapasse"], "series": {"Disponivel": [1056, 6510, 8257, 3768, 2132, 3578, 3934, 1382, 4122, 3606, 24130], "Quarentena": [0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0], "Danificado": [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], "Transferencia": [312, 2972, 1812, 138, 103, 547, 785, 526, 1305, 886, 207], "Pend. Fiscal": [1, 3, 3, 0, 3, 2, 1, 0, 2, 1, 2], "Pend. Saida": [59, 543, 309, 86, 22, 110, 149, 71, 245, 71, 289], "Aguard. Remocao": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, "totals": [1508, 12070, 11097, 3912, 2241, 4311, 4752, 2073, 5670, 5090, 24453], "kpis": {"total_stock": 77177, "total_available": 62475, "total_blocked": 14702}}, "warehouse": {"warehouses": ["BRSP19", "BRSP15", "BRSP18", "BRSP25", "BRSP14", "BRSP04", "BRSP02", "BRRJ02", "BRBA01", "BRPE01", "BRSC02", "BRPR01", "BRRC01", "BRDF01", "BRSP24", "BRRS01", "BRSP30", "BRSP10", "BRMG01"], "stocks": [13405, 9812, 9589, 8873, 7071, 5373, 4993, 4829, 3868, 3124, 2353, 2105, 1068, 287, 263, 131, 27, 4, 2], "pcts": [17.4, 12.7, 12.4, 11.5, 9.2, 7.0, 6.5, 6.3, 5.0, 4.0, 3.0, 2.7, 1.4, 0.4, 0.3, 0.2, 0.0, 0.0, 0.0], "kpis": {"total_warehouses": 19, "top_warehouse": "BRSP19", "top_pct": 17.4}}, "safety": {"products": ["Pro3 Claro", "Mini BT", "Pro3 Vivo", "Pro3 Tim", "Smart 2 Claro", "Air 2 Vivo", "Ultrapasse", "Smart 2 Tim", "Smart 2 Vivo", "Air 2 Claro", "Air 2 Tim"], "available": [4122, 6510, 8257, 3934, 1382, 3606, 24130, 1056, 3578, 3768, 2132], "avg_daily": [181.6, 231.6, 281.6, 127.0, 43.3, 97.4, 606.4, 24.1, 76.3, 74.8, 34.7], "days": [22.7, 28.1, 29.3, 31.0, 31.9, 37.0, 39.8, 43.8, 46.9, 50.4, 61.4], "outbound_60d": [10894, 13897, 16895, 7619, 2598, 5846, 36386, 1445, 4575, 4487, 2083], "kpis": {"critical_product": "Pro3 Claro", "critical_days": 22.7, "best_product": "Air 2 Tim", "best_days": 61.4, "avg_days": 38.4}}};
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 function fmtN(n){
@@ -125,9 +139,14 @@ document.getElementById("k-ultra-sales") .textContent = fmtN(D.sales.kpis.total_
 document.getElementById("k-stock-total") .textContent = fmtN(D.stock.kpis.total_stock);
 document.getElementById("k-stock-avail") .textContent = fmtN(D.stock.kpis.total_available);
 document.getElementById("k-stock-block") .textContent = fmtN(D.stock.kpis.total_blocked);
-document.getElementById("k-wh-count")    .textContent = D.warehouse.kpis.total_warehouses;
-document.getElementById("k-wh-top")      .textContent = D.warehouse.kpis.top_warehouse;
-document.getElementById("k-wh-top-pct")  .textContent = D.warehouse.kpis.top_pct+"% do total";
+document.getElementById("k-wh-count")       .textContent = D.warehouse.kpis.total_warehouses;
+document.getElementById("k-wh-top")         .textContent = D.warehouse.kpis.top_warehouse;
+document.getElementById("k-wh-top-pct")     .textContent = D.warehouse.kpis.top_pct+"% do total";
+document.getElementById("k-ss-critical-days").textContent = D.safety.kpis.critical_days+"d";
+document.getElementById("k-ss-critical-prod").textContent = D.safety.kpis.critical_product;
+document.getElementById("k-ss-best-days")   .textContent = D.safety.kpis.best_days+"d";
+document.getElementById("k-ss-best-prod")   .textContent = D.safety.kpis.best_product;
+document.getElementById("k-ss-avg-days")    .textContent = D.safety.kpis.avg_days+"d";
 
 // ── Grafico 1 — Vendas mensais ────────────────────────────────────────────────
 new Chart(document.getElementById("c1"), {
@@ -187,6 +206,72 @@ new Chart(document.getElementById("c2"), {
     scales: {
       x: { stacked: true },
       y: { stacked: true, beginAtZero: true, title: { display: true, text: "Unidades" } }
+    }
+  }
+});
+
+// ── Grafico 4 — Dias de cobertura (safety stock) ─────────────────────────────
+new Chart(document.getElementById("c4"), {
+  type: "bar",
+  data: {
+    labels: D.safety.products,
+    datasets: [
+      {
+        label: "Dias de estoque disponivel",
+        data: D.safety.days,
+        backgroundColor: D.safety.days.map(d =>
+          d < 15  ? ax("#FF4D4F", 0.85) :
+          d < 30  ? ax("#FF7A00", 0.85) :
+                    ax("#00C48C", 0.85)),
+        borderColor: D.safety.days.map(d =>
+          d < 15 ? "#FF4D4F" : d < 30 ? "#FF7A00" : "#00C48C"),
+        borderWidth: 1,
+      },
+      {
+        label: "Media vendas/dia (60d)",
+        data: D.safety.avg_daily,
+        type: "line",
+        yAxisID: "y2",
+        borderColor: "#2D73F5",
+        backgroundColor: "transparent",
+        borderWidth: 2,
+        pointRadius: 5,
+        pointBackgroundColor: "#2D73F5",
+        tension: 0.3,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      legend: { position: "top" },
+      tooltip: {
+        callbacks: {
+          afterBody: ctx => {
+            const i = ctx[0].dataIndex;
+            return ["Estoque disponivel: "+D.safety.available[i].toLocaleString("pt-BR")+" un",
+                    "Outbound 60d: "+D.safety.outbound_60d[i].toLocaleString("pt-BR")+" un"];
+          }
+        }
+      }
+    },
+    scales: {
+      x: { title: { display: true, text: "Produto" } },
+      y: {
+        beginAtZero: true,
+        title: { display: true, text: "Dias de cobertura" },
+        grid: {
+          color: ctx => ctx.tick.value === 15 ? "rgba(255,77,79,0.4)" :
+                        ctx.tick.value === 30 ? "rgba(255,122,0,0.4)" : "rgba(0,0,0,0.05)"
+        }
+      },
+      y2: {
+        position: "right",
+        beginAtZero: true,
+        title: { display: true, text: "Vendas/dia (unid)" },
+        grid: { drawOnChartArea: false }
+      }
     }
   }
 });

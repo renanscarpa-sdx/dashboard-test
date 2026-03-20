@@ -86,6 +86,46 @@ GROUP BY 1, 2
 ORDER BY product_type, INVENTORY_ID
 """
 
+QUERY_SAFETY_STOCK = f"""
+WITH latest AS (
+  SELECT MAX(CALENDAR_DATE) AS max_date
+  FROM `meli-bi-data.WHOWNER.DM_SHP_FBM_STOCK_QUALITY_FC`
+  WHERE INVENTORY_ID IN ({_IDS}) AND SIT_SITE_ID = 'MLB'
+),
+sales_60d AS (
+  SELECT
+    INVENTORY_ID,
+    SUM(OUTBOUND)                                               AS total_outbound_60d,
+    COUNT(DISTINCT CALENDAR_DATE)                               AS days_with_data,
+    SAFE_DIVIDE(SUM(OUTBOUND), COUNT(DISTINCT CALENDAR_DATE))   AS avg_daily_sales
+  FROM `meli-bi-data.WHOWNER.DM_SHP_FBM_STOCK_QUALITY_FC`, latest
+  WHERE CALENDAR_DATE > DATE_SUB(max_date, INTERVAL 60 DAY)
+    AND CALENDAR_DATE <= max_date
+    AND INVENTORY_ID IN ({_IDS})
+    AND SIT_SITE_ID = 'MLB'
+  GROUP BY 1
+),
+current_stock AS (
+  SELECT INVENTORY_ID, SUM(AVAILABLE_STOCK) AS available_stock
+  FROM `meli-bi-data.WHOWNER.DM_SHP_FBM_STOCK_QUALITY_FC`, latest
+  WHERE CALENDAR_DATE = max_date
+    AND INVENTORY_ID IN ({_IDS})
+    AND SIT_SITE_ID = 'MLB'
+  GROUP BY 1
+)
+SELECT
+  s.INVENTORY_ID,
+  CASE WHEN s.INVENTORY_ID = 'EPVM97846' THEN 'Ultrapasse' ELSE 'Point' END AS product_type,
+  ROUND(s.avg_daily_sales, 1)                                 AS avg_daily_sales,
+  s.total_outbound_60d,
+  s.days_with_data,
+  ROUND(c.available_stock, 0)                                 AS available_stock,
+  ROUND(SAFE_DIVIDE(c.available_stock, s.avg_daily_sales), 1) AS days_of_stock
+FROM sales_60d s
+JOIN current_stock c USING (INVENTORY_ID)
+ORDER BY days_of_stock ASC
+"""
+
 QUERY_WAREHOUSE_DIST = f"""
 SELECT
   WAREHOUSE_ID,
@@ -180,6 +220,33 @@ def build_stock_data(df):
     }
 
 
+def build_safety_data(df):
+    df = df.copy()
+    products   = [PRODUCT_NAMES.get(i, i) for i in df["INVENTORY_ID"].tolist()]
+    avail      = [safe_int(v) for v in df["available_stock"]]
+    avg_daily  = [round(float(v), 1) if pd.notna(v) else 0 for v in df["avg_daily_sales"]]
+    days       = [round(float(v), 1) if pd.notna(v) else 0 for v in df["days_of_stock"]]
+    outbound60 = [safe_int(v) for v in df["total_outbound_60d"]]
+
+    min_idx = days.index(min(days))
+    max_idx = days.index(max(days))
+
+    return {
+        "products":    products,
+        "available":   avail,
+        "avg_daily":   avg_daily,
+        "days":        days,
+        "outbound_60d": outbound60,
+        "kpis": {
+            "critical_product": products[min_idx],
+            "critical_days":    days[min_idx],
+            "best_product":     products[max_idx],
+            "best_days":        days[max_idx],
+            "avg_days":         round(sum(days) / len(days), 1) if days else 0,
+        }
+    }
+
+
 def build_warehouse_data(df):
     df = df.copy()
     total = float(df["total_stock"].sum())
@@ -270,6 +337,13 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     <div class="kpi">         <div class="lbl">Warehouses Ativos</div>             <div class="val" id="k-wh-count"></div>   <div class="sub">Com estoque</div></div>
     <div class="kpi c-blue">  <div class="lbl">Top Warehouse</div>                 <div class="val" style="font-size:1.1rem" id="k-wh-top"></div><div class="sub" id="k-wh-top-pct"></div></div>
   </div>
+  <div style="margin-top:12px">
+  <div class="kpi-grid">
+    <div class="kpi c-red">   <div class="lbl">Menor Cobertura</div>   <div class="val" id="k-ss-critical-days"></div><div class="sub" id="k-ss-critical-prod"></div></div>
+    <div class="kpi c-green"> <div class="lbl">Maior Cobertura</div>   <div class="val" id="k-ss-best-days"></div>   <div class="sub" id="k-ss-best-prod"></div></div>
+    <div class="kpi c-orange"><div class="lbl">Cobertura Media</div>   <div class="val" id="k-ss-avg-days"></div>    <div class="sub">Media entre produtos</div></div>
+  </div>
+  </div>
   </div>
 
   <!-- Grafico 1 -->
@@ -291,6 +365,13 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   <div class="chart-card xtall">
     <h3>Estoque Total por Warehouse — % representatividade</h3>
     <canvas id="c3"></canvas>
+  </div>
+
+  <!-- Grafico 4 -->
+  <div class="section-title">Grafico 4 — Estoque de Seguranca (Dias de Cobertura)</div>
+  <div class="chart-card tall">
+    <h3>Dias de Estoque Disponivel vs Media de Vendas Diarias (ultimos 60 dias)</h3>
+    <canvas id="c4"></canvas>
   </div>
 
 </div>
@@ -329,9 +410,14 @@ document.getElementById("k-ultra-sales") .textContent = fmtN(D.sales.kpis.total_
 document.getElementById("k-stock-total") .textContent = fmtN(D.stock.kpis.total_stock);
 document.getElementById("k-stock-avail") .textContent = fmtN(D.stock.kpis.total_available);
 document.getElementById("k-stock-block") .textContent = fmtN(D.stock.kpis.total_blocked);
-document.getElementById("k-wh-count")    .textContent = D.warehouse.kpis.total_warehouses;
-document.getElementById("k-wh-top")      .textContent = D.warehouse.kpis.top_warehouse;
-document.getElementById("k-wh-top-pct")  .textContent = D.warehouse.kpis.top_pct+"% do total";
+document.getElementById("k-wh-count")       .textContent = D.warehouse.kpis.total_warehouses;
+document.getElementById("k-wh-top")         .textContent = D.warehouse.kpis.top_warehouse;
+document.getElementById("k-wh-top-pct")     .textContent = D.warehouse.kpis.top_pct+"% do total";
+document.getElementById("k-ss-critical-days").textContent = D.safety.kpis.critical_days+"d";
+document.getElementById("k-ss-critical-prod").textContent = D.safety.kpis.critical_product;
+document.getElementById("k-ss-best-days")   .textContent = D.safety.kpis.best_days+"d";
+document.getElementById("k-ss-best-prod")   .textContent = D.safety.kpis.best_product;
+document.getElementById("k-ss-avg-days")    .textContent = D.safety.kpis.avg_days+"d";
 
 // ── Grafico 1 — Vendas mensais ────────────────────────────────────────────────
 new Chart(document.getElementById("c1"), {{
@@ -395,6 +481,72 @@ new Chart(document.getElementById("c2"), {{
   }}
 }});
 
+// ── Grafico 4 — Dias de cobertura (safety stock) ─────────────────────────────
+new Chart(document.getElementById("c4"), {{
+  type: "bar",
+  data: {{
+    labels: D.safety.products,
+    datasets: [
+      {{
+        label: "Dias de estoque disponivel",
+        data: D.safety.days,
+        backgroundColor: D.safety.days.map(d =>
+          d < 15  ? ax("#FF4D4F", 0.85) :
+          d < 30  ? ax("#FF7A00", 0.85) :
+                    ax("#00C48C", 0.85)),
+        borderColor: D.safety.days.map(d =>
+          d < 15 ? "#FF4D4F" : d < 30 ? "#FF7A00" : "#00C48C"),
+        borderWidth: 1,
+      }},
+      {{
+        label: "Media vendas/dia (60d)",
+        data: D.safety.avg_daily,
+        type: "line",
+        yAxisID: "y2",
+        borderColor: "#2D73F5",
+        backgroundColor: "transparent",
+        borderWidth: 2,
+        pointRadius: 5,
+        pointBackgroundColor: "#2D73F5",
+        tension: 0.3,
+      }}
+    ]
+  }},
+  options: {{
+    responsive: true,
+    interaction: {{ mode: "index", intersect: false }},
+    plugins: {{
+      legend: {{ position: "top" }},
+      tooltip: {{
+        callbacks: {{
+          afterBody: ctx => {{
+            const i = ctx[0].dataIndex;
+            return ["Estoque disponivel: "+D.safety.available[i].toLocaleString("pt-BR")+" un",
+                    "Outbound 60d: "+D.safety.outbound_60d[i].toLocaleString("pt-BR")+" un"];
+          }}
+        }}
+      }}
+    }},
+    scales: {{
+      x: {{ title: {{ display: true, text: "Produto" }} }},
+      y: {{
+        beginAtZero: true,
+        title: {{ display: true, text: "Dias de cobertura" }},
+        grid: {{
+          color: ctx => ctx.tick.value === 15 ? "rgba(255,77,79,0.4)" :
+                        ctx.tick.value === 30 ? "rgba(255,122,0,0.4)" : "rgba(0,0,0,0.05)"
+        }}
+      }},
+      y2: {{
+        position: "right",
+        beginAtZero: true,
+        title: {{ display: true, text: "Vendas/dia (unid)" }},
+        grid: {{ drawOnChartArea: false }}
+      }}
+    }}
+  }}
+}});
+
 // ── Grafico 3 — Warehouse % (horizontal bar) ──────────────────────────────────
 const whLabels = D.warehouse.warehouses.map(
   (w,i) => w+" ("+D.warehouse.pcts[i]+"%)");
@@ -432,12 +584,13 @@ new Chart(document.getElementById("c3"), {{
 
 # ── GERAR HTML ────────────────────────────────────────────────────────────────
 
-def generate_html(sales_data, stock_data, warehouse_data):
+def generate_html(sales_data, stock_data, warehouse_data, safety_data):
     payload = {
         "updated_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "sales":      sales_data,
         "stock":      stock_data,
         "warehouse":  warehouse_data,
+        "safety":     safety_data,
     }
     data_json = json.dumps(payload, ensure_ascii=False, default=str)
     html = HTML_TEMPLATE.format(data_json=data_json, date_from=DATE_FROM)
@@ -456,14 +609,16 @@ def main():
     df_sales     = run_query(client, QUERY_SALES_MONTHLY,  "vendas-mensais")
     df_stock     = run_query(client, QUERY_STOCK_DETAIL,   "estoque-detalhe")
     df_warehouse = run_query(client, QUERY_WAREHOUSE_DIST, "warehouse-dist")
+    df_safety    = run_query(client, QUERY_SAFETY_STOCK,   "safety-stock")
 
     print("\nMontando dados...")
     sales_data     = build_sales_data(df_sales)
     stock_data     = build_stock_data(df_stock)
     warehouse_data = build_warehouse_data(df_warehouse)
+    safety_data    = build_safety_data(df_safety)
 
     print("Gerando HTML...")
-    generate_html(sales_data, stock_data, warehouse_data)
+    generate_html(sales_data, stock_data, warehouse_data, safety_data)
 
     print("\nPara publicar:")
     print("  git add dashboard_estoque.html && git commit -m 'dashboard estoque MLB' && git push")
