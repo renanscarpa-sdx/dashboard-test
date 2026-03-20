@@ -29,6 +29,20 @@ INVENTORY_IDS = [
 ]
 ULTRAPASSE_IDS = {'EPVM97846'}
 
+PRODUCT_NAMES = {
+    'QCGO40352': 'Smart 2 Claro',
+    'NEFY38719': 'Smart 2 Vivo',
+    'BHEI39907': 'Smart 2 Tim',
+    'BHZW22909': 'Mini BT',
+    'VLKF40709': 'Pro3 Claro',
+    'JVUG38431': 'Pro3 Vivo',
+    'NGMH40323': 'Pro3 Tim',
+    'KEKJ53768': 'Air 2 Claro',
+    'WDUM53222': 'Air 2 Vivo',
+    'MXPN53308': 'Air 2 Tim',
+    'EPVM97846': 'Ultrapasse',
+}
+
 _IDS = ", ".join(f"'{i}'" for i in INVENTORY_IDS)
 
 # ── QUERIES ───────────────────────────────────────────────────────────────────
@@ -140,7 +154,7 @@ def build_sales_data(df):
 
 def build_stock_data(df):
     df = df.copy()
-    skus      = df["INVENTORY_ID"].tolist()
+    skus      = [PRODUCT_NAMES.get(i, i) for i in df["INVENTORY_ID"].tolist()]
     types     = df["product_type"].tolist()
     fields    = ["available", "quarantine", "damaged", "transfer",
                  "invoice_pending", "outbound_pending", "waiting_removal"]
