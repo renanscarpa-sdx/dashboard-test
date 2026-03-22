@@ -516,7 +516,21 @@ new Chart(document.getElementById("c4"), {{
     responsive: true,
     interaction: {{ mode: "index", intersect: false }},
     plugins: {{
-      legend: {{ position: "top" }},
+      legend: {{
+        position: "top",
+        labels: {{
+          usePointStyle: true,
+          pointStyleWidth: 14,
+          padding: 18,
+          font: {{ size: 12 }},
+          generateLabels: () => [
+            {{ text: "< 15 dias — Crítico",   fillStyle: ax("#FF4D4F",0.85), strokeStyle: "#FF4D4F", lineWidth: 1, pointStyle: "rect",    hidden: false }},
+            {{ text: "15–30 dias — Atenção",  fillStyle: ax("#FF7A00",0.85), strokeStyle: "#FF7A00", lineWidth: 1, pointStyle: "rect",    hidden: false }},
+            {{ text: "≥ 30 dias — OK",        fillStyle: ax("#00C48C",0.85), strokeStyle: "#00C48C", lineWidth: 1, pointStyle: "rect",    hidden: false }},
+            {{ text: "Média vendas/dia (60d)", fillStyle: "transparent",      strokeStyle: "#2D73F5", lineWidth: 2, pointStyle: "line",    hidden: false }},
+          ]
+        }}
+      }},
       tooltip: {{
         callbacks: {{
           afterBody: ctx => {{
