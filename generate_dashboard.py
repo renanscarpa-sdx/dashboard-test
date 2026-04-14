@@ -523,7 +523,8 @@ def build_tab_data(df_sales: pd.DataFrame, df_lt: pd.DataFrame) -> dict:
 
         sold      = [int(s.loc[m, "total_items"])    if m in s.index else 0 for m in all_months]
         delivered = [int(s.loc[m, "delivered_items"]) if m in s.index else 0 for m in all_months]
-        rate      = [round(d / t * 100, 1) if t > 0 else 0 for d, t in zip(delivered, sold)]
+        rate         = [round(d / t * 100, 1)       if t > 0 else 0 for d, t in zip(delivered, sold)]
+        failure_rate = [round((t - d) / t * 100, 1) if t > 0 else 0 for d, t in zip(delivered, sold)]
 
         lt_avg = []
         for m in all_months:
@@ -543,6 +544,7 @@ def build_tab_data(df_sales: pd.DataFrame, df_lt: pd.DataFrame) -> dict:
             "sold":          sold,
             "delivered":     delivered,
             "delivery_rate": rate,
+            "failure_rate":  failure_rate,
             "lead_time":     lt_avg,
             "lt_by_picking": lt_by_picking,
         }
@@ -801,9 +803,9 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     <div class="chart-card"><h3>Itens Vendidos por Mes</h3>   <canvas id="p-c1-sold"></canvas></div>
     <div class="chart-card"><h3>Itens Entregues por Mes</h3>  <canvas id="p-c1-del"></canvas></div>
   </div>
-  <div class="section-title">Grafico 2 — Taxa de Entrega por Mes (por Pais)</div>
+  <div class="section-title">Grafico 2 — Taxa de Insucesso de Entrega por Mes (por Pais)</div>
   <div class="chart-grid cols-1">
-    <div class="chart-card"><h3>Taxa de Entrega (%) por Mes e Pais</h3><canvas id="p-c2-rate"></canvas></div>
+    <div class="chart-card"><h3>Taxa de Insucesso de Entrega (%) por Mes e Pais</h3><canvas id="p-c2-rate"></canvas></div>
   </div>
   <div class="section-title">Grafico 3 — Lead Time Medio por Mes (por Pais)</div>
   <div class="chart-grid cols-1">
@@ -968,7 +970,7 @@ function lineChartEl(el,labels,datasets,yLabel=""){{
 }}
 
 // ── Renderiza os 4 graficos de uma aba ────────────────────────────────────────
-function renderTab(prefix, tabData){{
+function renderTab(prefix, tabData, rateKey="delivery_rate"){{
   const ml    = tabData.labels;
   const bs    = tabData.by_site;
   const sites = tabData.sites;
@@ -978,7 +980,7 @@ function renderTab(prefix, tabData){{
   lineChart(prefix+"-c1-del",  ml, sites.map(s=>mkLine(s, bs[s].delivered, sc(s))), "Itens");
 
   // Grafico 2
-  lineChart(prefix+"-c2-rate", ml, sites.map(s=>mkLine(s, bs[s].delivery_rate, sc(s), true)), "%");
+  lineChart(prefix+"-c2-rate", ml, sites.map(s=>mkLine(s, bs[s][rateKey], sc(s), true)), "%");
 
   // Grafico 3
   lineChart(prefix+"-c3-lt", ml, sites.map(s=>mkLine(s, bs[s].lead_time, sc(s))), "Dias habeis");
@@ -1147,7 +1149,7 @@ document.getElementById("footer-dt").textContent = D.updated_at;
 
 setKpis("p", D.points.kpis);
 setKpis("c", D.cards.kpis);
-renderTab("p", D.points);
+renderTab("p", D.points, "failure_rate");
 renderTab("c", D.cards);
 renderSlaTab("s3", D.sla_points);
 renderSlaTab("s4", D.sla_cards);
