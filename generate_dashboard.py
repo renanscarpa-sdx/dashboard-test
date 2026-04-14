@@ -64,11 +64,13 @@ WITH base AS (
 )
 SELECT
   month,
-  SIT_SITE_ID                                                 AS site,
-  COUNT(*)                                                    AS total_orders,
-  SUM(items)                                                  AS total_items,
-  COUNTIF(delivered_flag = 1)                                 AS delivered_orders,
-  SUM(CASE WHEN delivered_flag = 1 THEN items ELSE 0 END)     AS delivered_items
+  SIT_SITE_ID                                                           AS site,
+  COUNT(*)                                                              AS total_orders,
+  SUM(items)                                                            AS total_items,
+  COUNTIF(delivered_flag = 1)                                           AS delivered_orders,
+  SUM(CASE WHEN delivered_flag = 1 THEN items ELSE 0 END)               AS delivered_items,
+  COUNTIF(delivered_flag = 0)                                           AS not_delivered_orders,
+  SUM(CASE WHEN delivered_flag = 0 THEN items ELSE 0 END)               AS not_delivered_items
 FROM base
 GROUP BY 1, 2
 ORDER BY 1, 2
@@ -523,8 +525,9 @@ def build_tab_data(df_sales: pd.DataFrame, df_lt: pd.DataFrame) -> dict:
 
         sold      = [int(s.loc[m, "total_items"])    if m in s.index else 0 for m in all_months]
         delivered = [int(s.loc[m, "delivered_items"]) if m in s.index else 0 for m in all_months]
-        rate         = [round(d / t * 100, 1)       if t > 0 else 0 for d, t in zip(delivered, sold)]
-        failure_rate = [round((t - d) / t * 100, 1) if t > 0 else 0 for d, t in zip(delivered, sold)]
+        rate         = [round(d / t * 100, 1) if t > 0 else 0 for d, t in zip(delivered, sold)]
+        not_del      = [int(s.loc[m, "not_delivered_items"]) if m in s.index and "not_delivered_items" in s.columns else 0 for m in all_months]
+        failure_rate = [round(n / t * 100, 1) if t > 0 else 0 for n, t in zip(not_del, sold)]
 
         lt_avg = []
         for m in all_months:
@@ -803,9 +806,9 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     <div class="chart-card"><h3>Itens Vendidos por Mes</h3>   <canvas id="p-c1-sold"></canvas></div>
     <div class="chart-card"><h3>Itens Entregues por Mes</h3>  <canvas id="p-c1-del"></canvas></div>
   </div>
-  <div class="section-title">Grafico 2 — Taxa de Insucesso de Entrega por Mes (por Pais)</div>
+  <div class="section-title">Grafico 2 — Taxa de Not Delivered por Mes (por Pais)</div>
   <div class="chart-grid cols-1">
-    <div class="chart-card"><h3>Taxa de Insucesso de Entrega (%) por Mes e Pais</h3><canvas id="p-c2-rate"></canvas></div>
+    <div class="chart-card"><h3>Taxa de Not Delivered (%) por Mes e Pais — status = not_delivered</h3><canvas id="p-c2-rate"></canvas></div>
   </div>
   <div class="section-title">Grafico 3 — Lead Time Medio por Mes (por Pais)</div>
   <div class="chart-grid cols-1">
