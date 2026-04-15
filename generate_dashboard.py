@@ -114,6 +114,41 @@ GROUP BY 1, 2, 3
 ORDER BY 1, 2, 3
 """
 
+QUERY_POINTS_ND_PICKING = f"""
+WITH base AS (
+  SELECT
+    DATE_TRUNC(DATE(ORDER_DATE), MONTH)                       AS month,
+    SIT_SITE_ID,
+    COALESCE(NULLIF(SHP_PICKING_TYPE_ID, ''), 'unknown')      AS picking_type,
+    FLAG_DELIVERED,
+    COALESCE(Q_DEVICES, 1)                                    AS items
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS_MLB`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+  UNION ALL
+  SELECT
+    DATE_TRUNC(DATE(ORDER_DATE), MONTH),
+    SIT_SITE_ID,
+    COALESCE(NULLIF(SHP_PICKING_TYPE_ID, ''), 'unknown'),
+    FLAG_DELIVERED,
+    COALESCE(Q_DEVICES, 1)
+  FROM `meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS`
+  WHERE DATE(ORDER_DATE) >= '{DATE_FROM}'
+    AND SHP_SENDER_ID IN ({_CUSTS})
+    AND SIT_SITE_ID IN ({_SITES_GERAL})
+)
+SELECT
+  month,
+  SIT_SITE_ID                                                 AS site,
+  picking_type,
+  COUNT(*)                                                    AS total_orders,
+  COUNTIF(FLAG_DELIVERED = 0)                                 AS not_delivered,
+  ROUND(COUNTIF(FLAG_DELIVERED = 0) / COUNT(*) * 100, 2)     AS nd_pct
+FROM base
+GROUP BY 1, 2, 3
+ORDER BY 1, 2, 3
+"""
+
 # ── QUERIES — ABA 2: Cards ────────────────────────────────────────────────────
 
 QUERY_CARDS_SALES = f"""
@@ -509,11 +544,14 @@ def wavg(df, val_col, weight_col):
 
 # ── MONTAGEM — reutilizavel para qualquer aba ─────────────────────────────────
 
-def build_tab_data(df_sales: pd.DataFrame, df_lt: pd.DataFrame) -> dict:
+def build_tab_data(df_sales: pd.DataFrame, df_lt: pd.DataFrame, df_nd: pd.DataFrame = None) -> dict:
     df_sales = df_sales.copy()
     df_lt    = df_lt.copy()
     df_sales["month"] = df_sales["month"].astype(str)
     df_lt["month"]    = df_lt["month"].astype(str)
+    if df_nd is not None:
+        df_nd = df_nd.copy()
+        df_nd["month"] = df_nd["month"].astype(str)
 
     all_months = sorted(df_sales["month"].unique())
     all_sites  = sorted(df_sales["site"].unique())
@@ -543,13 +581,25 @@ def build_tab_data(df_sales: pd.DataFrame, df_lt: pd.DataFrame) -> dict:
                 series.append(wavg(sub_m, "avg_lead_time", "cnt") if len(sub_m) > 0 else None)
             lt_by_picking[pt] = series
 
+        nd_by_picking = {}
+        if df_nd is not None:
+            nd_site = df_nd[df_nd["site"] == site]
+            for pt in sorted(nd_site["picking_type"].unique()):
+                sub_pt = nd_site[nd_site["picking_type"] == pt]
+                series = []
+                for m in all_months:
+                    sub_m = sub_pt[sub_pt["month"] == m]
+                    series.append(round(float(sub_m["nd_pct"].iloc[0]), 2) if len(sub_m) > 0 else None)
+                nd_by_picking[pt] = series
+
         by_site[site] = {
-            "sold":          sold,
-            "delivered":     delivered,
-            "delivery_rate": rate,
-            "failure_rate":  failure_rate,
-            "lead_time":     lt_avg,
-            "lt_by_picking": lt_by_picking,
+            "sold":           sold,
+            "delivered":      delivered,
+            "delivery_rate":  rate,
+            "failure_rate":   failure_rate,
+            "lead_time":      lt_avg,
+            "lt_by_picking":  lt_by_picking,
+            "nd_by_picking":  nd_by_picking,
         }
 
     total_sold      = int(df_sales["total_items"].sum())
@@ -816,6 +866,8 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   </div>
   <div class="section-title">Grafico 4 — Lead Time por Picking Type e Pais</div>
   <div class="picking-grid" id="p-c4"></div>
+  <div class="section-title">Grafico 5 — Not Delivered (%) por Metodo de Envio e Pais</div>
+  <div class="picking-grid" id="p-c5"></div>
 </div>
 
 <!-- ── ABA 2: Cards ── -->
@@ -1001,6 +1053,22 @@ function renderTab(prefix, tabData, rateKey="delivery_rate"){{
       picks.map((pt,i)=>mkLine(pt, bs[site].lt_by_picking[pt], PICK_COLORS[i%PICK_COLORS.length])),
       "Dias habeis");
   }});
+
+  // Grafico 5 — Not Delivered % por picking type por pais
+  const c5 = document.getElementById(prefix+"-c5");
+  if(c5) {{
+    sites.forEach(site => {{
+      const picks = Object.keys(bs[site].nd_by_picking || {{}});
+      if(!picks.length) return;
+      const card = document.createElement("div");
+      card.className = "chart-card";
+      card.innerHTML = `<h3>Not Delivered % — ${{site}}</h3><canvas></canvas>`;
+      c5.appendChild(card);
+      lineChartEl(card.querySelector("canvas"), ml,
+        picks.map((pt,i)=>mkLine(pt, bs[site].nd_by_picking[pt], PICK_COLORS[i%PICK_COLORS.length])),
+        "%");
+    }});
+  }}
 }}
 
 // ── KPIs ──────────────────────────────────────────────────────────────────────
@@ -1188,8 +1256,9 @@ def main():
     client = bigquery.Client(project=PROJECT)
 
     print("\n[ABA 1] Points & Others — visao geral...")
-    df_p_sales = run_query(client, QUERY_POINTS_SALES, "points-vendas")
-    df_p_lt    = run_query(client, QUERY_POINTS_LT,    "points-leadtime")
+    df_p_sales  = run_query(client, QUERY_POINTS_SALES,      "points-vendas")
+    df_p_lt     = run_query(client, QUERY_POINTS_LT,         "points-leadtime")
+    df_p_nd_pick= run_query(client, QUERY_POINTS_ND_PICKING,  "points-nd-picking")
 
     print("\n[ABA 2] Cards — visao geral...")
     df_c_sales = run_query(client, QUERY_CARDS_SALES,  "cards-vendas")
@@ -1211,7 +1280,7 @@ def main():
     df_f_warehouse= run_query(client, QUERY_FULL_WAREHOUSE,"full-warehouse")
 
     print("\nMontando dados...")
-    points_data = build_tab_data(df_p_sales, df_p_lt)
+    points_data = build_tab_data(df_p_sales, df_p_lt, df_p_nd_pick)
     cards_data  = build_tab_data(df_c_sales, df_c_lt)
     sla_points  = build_sla_data(df_p_sla, df_p_motivos)
     sla_cards   = build_sla_data(df_c_sla, df_c_motivos)
