@@ -153,20 +153,18 @@ ORDER BY site, rn
 """
 
 # Gráfico 2 — Top 3 estados por país com lead time médio aberto por método de envio
+# Nota: CTE renomeado para state_vol (evita conflito de nome com a coluna alias)
 QUERY_TOP3_BY_PICKING = f"""
 WITH {_BASE_CTE},
-vol AS (
-  SELECT site, state, COUNT(ORDER_SHIPPING_NUMBER) AS vol
+state_vol AS (
+  SELECT site, state, COUNT(ORDER_SHIPPING_NUMBER) AS order_count
   FROM all_orders
   GROUP BY 1, 2
 ),
 top3 AS (
   SELECT site, state
-  FROM (
-    SELECT *, ROW_NUMBER() OVER (PARTITION BY site ORDER BY vol DESC) AS rn
-    FROM vol
-  )
-  WHERE rn <= 3
+  FROM state_vol
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY site ORDER BY order_count DESC) <= 3
 )
 SELECT
   all_orders.site,

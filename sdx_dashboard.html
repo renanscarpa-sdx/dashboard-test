@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Dashboard Iniciativas SDX — 2025-01-01 a 2026-04-10</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --blue:#2D73F5; --orange:#FF7A00; --green:#00C48C; --red:#FF4D4F;
+  --purple:#9747FF; --teal:#00BCD4; --yellow:#FFC107; --lime:#8BC34A;
+  --gray:#607D8B; --pink:#E91E63;
+  --bg:#F4F6FA; --card:#FFFFFF; --text:#1A1A2E; --muted:#7A8099; --border:#E8EAEE;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
+
+.header{ background:var(--blue); color:#fff; padding:16px 28px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.header h1{ font-size:1.2rem; font-weight:700; }
+.header p{ font-size:.82rem; opacity:.85; margin-top:2px; }
+.badge{ background:rgba(255,255,255,.2); border-radius:20px; padding:3px 12px; font-size:.73rem; margin-left:auto; white-space:nowrap; }
+
+.tab-bar{ position:sticky; top:0; z-index:100; background:#fff;
+           border-bottom:2px solid var(--border); padding:0 28px;
+           display:flex; gap:0; overflow-x:auto; }
+.tab-btn{ padding:12px 22px; font-size:.84rem; font-weight:600; color:var(--muted);
+           border:none; background:none; cursor:pointer;
+           border-bottom:3px solid transparent; margin-bottom:-2px;
+           white-space:nowrap; transition:color .15s; }
+.tab-btn:hover{ color:var(--blue); }
+.tab-btn.active{ color:var(--blue); border-bottom-color:var(--blue); }
+
+.content{ padding:24px 28px; max-width:1600px; margin:0 auto; }
+
+.kpi-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+            gap:12px; margin-bottom:36px; }
+.kpi{ background:var(--card); border-radius:10px; padding:18px 20px;
+       box-shadow:0 1px 4px rgba(0,0,0,.07); }
+.kpi .lbl{ font-size:.74rem; color:var(--muted); margin-bottom:6px; }
+.kpi .val{ font-size:1.85rem; font-weight:700; line-height:1; }
+.kpi .sub{ font-size:.71rem; color:var(--muted); margin-top:5px; }
+.kpi.c-blue .val{ color:var(--blue); }
+.kpi.c-green .val{ color:var(--green); }
+.kpi.c-red .val{ color:var(--red); }
+.kpi.c-orange .val{ color:var(--orange); }
+
+.section{ margin-bottom:44px; scroll-margin-top:55px; }
+.section-title{ font-size:.82rem; font-weight:700; color:var(--muted);
+                 text-transform:uppercase; letter-spacing:.06em;
+                 margin-bottom:14px; padding-bottom:6px;
+                 border-bottom:2px solid var(--border);
+                 display:flex; align-items:center; gap:8px; }
+.section-num{ background:var(--blue); color:#fff; border-radius:50%;
+               width:22px; height:22px; display:inline-flex; align-items:center;
+               justify-content:center; font-size:.72rem; font-weight:700; flex-shrink:0; }
+
+.chart-grid{ display:grid; gap:16px; }
+.chart-grid.cols-2{ grid-template-columns:repeat(auto-fit,minmax(460px,1fr)); }
+.chart-grid.cols-1{ grid-template-columns:1fr; }
+.chart-card{ background:var(--card); border-radius:10px; padding:20px 22px;
+              box-shadow:0 1px 4px rgba(0,0,0,.07); }
+.chart-card h3{ font-size:.92rem; font-weight:600; margin-bottom:4px; color:var(--text); }
+.chart-card .subtitle{ font-size:.74rem; color:var(--muted); margin-bottom:14px; }
+.chart-card canvas{ max-height:310px; }
+.chart-card canvas.tall{ max-height:380px; }
+
+.footer{ text-align:center; padding:20px; font-size:.71rem; color:var(--muted); margin-top:20px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Dashboard Iniciativas SDX</h1>
+    <p>Período: 2025-01-01 a 2026-04-10 &nbsp;·&nbsp; Sites: MLB · MLC · MLM · MLA · MLU</p>
+  </div>
+  <span class="badge">Gerado em: 16/04/2026 10:44</span>
+</div>
+
+<nav class="tab-bar">
+  <button class="tab-btn active" data-tab="tab-geral"
+          onclick="showTab('tab-geral')">Visão Geral</button>
+  <button class="tab-btn" data-tab="tab-sla"
+          onclick="showTab('tab-sla')">Qualidade &amp; SLA — Points</button>
+</nav>
+
+<div class="content">
+
+  <!-- KPIs — sempre visíveis -->
+  <div id="sec-kpis" style="padding-top:28px;">
+    <div class="kpi-grid" id="kpi-grid"></div>
+  </div>
+
+  <!-- ══ ABA: Visão Geral ══════════════════════════════════════════════════ -->
+  <div id="tab-geral" class="tab-pane">
+
+    <!-- Seção 1 — Volume -->
+    <div class="section">
+      <div class="section-title"><span class="section-num">1</span>Volume de Pedidos por Mês e País</div>
+      <div class="chart-grid cols-2">
+        <div class="chart-card">
+          <h3>Pedidos Vendidos por Mês</h3>
+          <p class="subtitle">COUNT(ORDER_SHIPPING_NUMBER) · por mês e site</p>
+          <canvas id="chart-sold" class="tall"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Pedidos Entregues por Mês</h3>
+          <p class="subtitle">Pedidos com COALESCE(DATE_FIRST_VISIT, DATE_DELIVERED) preenchida</p>
+          <canvas id="chart-delivered" class="tall"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seção 2 — Not Delivered -->
+    <div class="section">
+      <div class="section-title"><span class="section-num">2</span>Taxa Not Delivered (%) por Mês e País</div>
+      <div class="chart-grid cols-1">
+        <div class="chart-card">
+          <h3>% Not Delivered por Mês e País</h3>
+          <p class="subtitle">SHP_STATUS_TYPE = 'not_delivered' / COUNT(ORDER_SHIPPING_NUMBER)</p>
+          <canvas id="chart-nd-pct" class="tall"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seção 3 — Lead Time -->
+    <div class="section">
+      <div class="section-title"><span class="section-num">3</span>Lead Time Médio (dias corridos) por Mês e País</div>
+      <div class="chart-grid cols-1">
+        <div class="chart-card">
+          <h3>Lead Time Médio por Mês e País</h3>
+          <p class="subtitle">DATE_DIFF(COALESCE(DATE_FIRST_VISIT, DATE_DELIVERED), DATE_CREATED, DAY)</p>
+          <canvas id="chart-lt" class="tall"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seção 4 — LT por Método -->
+    <div class="section">
+      <div class="section-title"><span class="section-num">4</span>Lead Time Médio por Método de Envio por Mês — por País</div>
+      <div class="chart-grid cols-2" id="section-lt-pick"></div>
+    </div>
+
+    <!-- Seção 5 — ND por Método -->
+    <div class="section">
+      <div class="section-title"><span class="section-num">5</span>% Not Delivered por Método de Envio por Mês — por País</div>
+      <div class="chart-grid cols-2" id="section-nd-pick"></div>
+    </div>
+
+  </div><!-- /tab-geral -->
+
+  <!-- ══ ABA: Qualidade & SLA ══════════════════════════════════════════════ -->
+  <div id="tab-sla" class="tab-pane" style="display:none">
+
+    <!-- Seção 1 — Top 3 estados: volume + lead time -->
+    <div class="section">
+      <div class="section-title">
+        <span class="section-num">1</span>Top 3 Estados por País — Volume e Lead Time Médio
+      </div>
+      <div class="chart-grid cols-2" id="sec-sla-1-grid"></div>
+    </div>
+
+    <!-- Seção 2 — Top 3 estados: lead time por método de envio -->
+    <div class="section">
+      <div class="section-title">
+        <span class="section-num">2</span>Top 3 Estados por País — Lead Time Médio por Método de Envio
+      </div>
+      <div class="chart-grid cols-2" id="sec-sla-2-grid"></div>
+    </div>
+
+    <!-- Seção 3 — Pareto de motivos ND -->
+    <div class="section">
+      <div class="section-title">
+        <span class="section-num">3</span>Pareto de Motivos de Falha de Entrega (Not Delivered) por País
+      </div>
+      <div class="chart-grid cols-2" id="sec-sla-3-grid"></div>
+    </div>
+
+  </div><!-- /tab-sla -->
+
+</div><!-- /content -->
+
+<div class="footer">
+  Fonte: meli-bi-data &nbsp;·&nbsp;
+  SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS_MLB &amp; TBL_LK_SDX_BASE_ORDERS &nbsp;·&nbsp;
+  2025-01-01 a 2026-04-10
+</div>
+
+<script>
+const DATA = {"kpis": {"total_sold": 17296575.0, "total_delivered": 17125353.0, "total_nd": 204245.0, "nd_pct": 1.18, "avg_lead_time": 4.19}, "by_month_country": [{"month": "2025-01", "site": "MLB", "sold_orders": 2, "delivered_orders": 0, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-01", "site": "MLM", "sold_orders": 6, "delivered_orders": 0, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-02", "site": "MLA", "sold_orders": 174, "delivered_orders": 173, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 7.47}, {"month": "2025-02", "site": "MLB", "sold_orders": 1582, "delivered_orders": 1580, "not_delivered": 39, "nd_pct": 2.47, "avg_lead_time": 7.26}, {"month": "2025-02", "site": "MLC", "sold_orders": 20, "delivered_orders": 20, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 4.1}, {"month": "2025-02", "site": "MLM", "sold_orders": 1208, "delivered_orders": 1190, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 4.2}, {"month": "2025-03", "site": "MLA", "sold_orders": 60035, "delivered_orders": 56468, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.41}, {"month": "2025-03", "site": "MLB", "sold_orders": 522533, "delivered_orders": 518017, "not_delivered": 9003, "nd_pct": 1.72, "avg_lead_time": 5.61}, {"month": "2025-03", "site": "MLC", "sold_orders": 7774, "delivered_orders": 7741, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.2}, {"month": "2025-03", "site": "MLM", "sold_orders": 183873, "delivered_orders": 179384, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.47}, {"month": "2025-04", "site": "MLA", "sold_orders": 63898, "delivered_orders": 62866, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.68}, {"month": "2025-04", "site": "MLB", "sold_orders": 496434, "delivered_orders": 490107, "not_delivered": 6727, "nd_pct": 1.36, "avg_lead_time": 6.08}, {"month": "2025-04", "site": "MLC", "sold_orders": 12626, "delivered_orders": 12597, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.45}, {"month": "2025-04", "site": "MLM", "sold_orders": 184703, "delivered_orders": 182472, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.82}, {"month": "2025-05", "site": "MLA", "sold_orders": 64438, "delivered_orders": 63039, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.07}, {"month": "2025-05", "site": "MLB", "sold_orders": 477786, "delivered_orders": 472943, "not_delivered": 6357, "nd_pct": 1.33, "avg_lead_time": 6.17}, {"month": "2025-05", "site": "MLC", "sold_orders": 11102, "delivered_orders": 11063, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.32}, {"month": "2025-05", "site": "MLM", "sold_orders": 239691, "delivered_orders": 239337, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.45}, {"month": "2025-06", "site": "MLA", "sold_orders": 57356, "delivered_orders": 56314, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.01}, {"month": "2025-06", "site": "MLB", "sold_orders": 629487, "delivered_orders": 622950, "not_delivered": 8692, "nd_pct": 1.38, "avg_lead_time": 5.78}, {"month": "2025-06", "site": "MLC", "sold_orders": 12142, "delivered_orders": 12099, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.21}, {"month": "2025-06", "site": "MLM", "sold_orders": 221102, "delivered_orders": 220783, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.58}, {"month": "2025-07", "site": "MLA", "sold_orders": 66464, "delivered_orders": 63432, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.77}, {"month": "2025-07", "site": "MLB", "sold_orders": 708805, "delivered_orders": 702169, "not_delivered": 10036, "nd_pct": 1.42, "avg_lead_time": 7.75}, {"month": "2025-07", "site": "MLC", "sold_orders": 13220, "delivered_orders": 13013, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.22}, {"month": "2025-07", "site": "MLM", "sold_orders": 206752, "delivered_orders": 205840, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.28}, {"month": "2025-08", "site": "MLA", "sold_orders": 62856, "delivered_orders": 61513, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.71}, {"month": "2025-08", "site": "MLB", "sold_orders": 827536, "delivered_orders": 817662, "not_delivered": 14413, "nd_pct": 1.74, "avg_lead_time": 4.33}, {"month": "2025-08", "site": "MLC", "sold_orders": 13479, "delivered_orders": 13447, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.45}, {"month": "2025-08", "site": "MLM", "sold_orders": 223896, "delivered_orders": 222883, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.33}, {"month": "2025-09", "site": "MLA", "sold_orders": 62323, "delivered_orders": 59759, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.61}, {"month": "2025-09", "site": "MLB", "sold_orders": 989748, "delivered_orders": 979216, "not_delivered": 14610, "nd_pct": 1.48, "avg_lead_time": 3.75}, {"month": "2025-09", "site": "MLC", "sold_orders": 14791, "delivered_orders": 14730, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.33}, {"month": "2025-09", "site": "MLM", "sold_orders": 231694, "delivered_orders": 231053, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.53}, {"month": "2025-10", "site": "MLA", "sold_orders": 70242, "delivered_orders": 68678, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.78}, {"month": "2025-10", "site": "MLB", "sold_orders": 1331551, "delivered_orders": 1323317, "not_delivered": 16370, "nd_pct": 1.23, "avg_lead_time": 3.94}, {"month": "2025-10", "site": "MLC", "sold_orders": 18123, "delivered_orders": 18066, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.3}, {"month": "2025-10", "site": "MLM", "sold_orders": 314047, "delivered_orders": 312373, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.89}, {"month": "2025-11", "site": "MLA", "sold_orders": 62604, "delivered_orders": 60511, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.97}, {"month": "2025-11", "site": "MLB", "sold_orders": 1330519, "delivered_orders": 1324065, "not_delivered": 20848, "nd_pct": 1.57, "avg_lead_time": 4.06}, {"month": "2025-11", "site": "MLC", "sold_orders": 19677, "delivered_orders": 19649, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.81}, {"month": "2025-11", "site": "MLM", "sold_orders": 396623, "delivered_orders": 394782, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.98}, {"month": "2025-12", "site": "MLA", "sold_orders": 60413, "delivered_orders": 59017, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.61}, {"month": "2025-12", "site": "MLB", "sold_orders": 1107058, "delivered_orders": 1099885, "not_delivered": 18927, "nd_pct": 1.71, "avg_lead_time": 4.99}, {"month": "2025-12", "site": "MLC", "sold_orders": 20950, "delivered_orders": 20895, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.14}, {"month": "2025-12", "site": "MLM", "sold_orders": 291546, "delivered_orders": 290560, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.57}, {"month": "2026-01", "site": "MLA", "sold_orders": 64053, "delivered_orders": 62046, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.77}, {"month": "2026-01", "site": "MLB", "sold_orders": 1317992, "delivered_orders": 1309787, "not_delivered": 21385, "nd_pct": 1.62, "avg_lead_time": 4.11}, {"month": "2026-01", "site": "MLC", "sold_orders": 20167, "delivered_orders": 20106, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.94}, {"month": "2026-01", "site": "MLM", "sold_orders": 281023, "delivered_orders": 278892, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.78}, {"month": "2026-02", "site": "MLA", "sold_orders": 72216, "delivered_orders": 68402, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.14}, {"month": "2026-02", "site": "MLB", "sold_orders": 1320591, "delivered_orders": 1312610, "not_delivered": 28562, "nd_pct": 2.16, "avg_lead_time": 4.23}, {"month": "2026-02", "site": "MLC", "sold_orders": 18940, "delivered_orders": 18907, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.9}, {"month": "2026-02", "site": "MLM", "sold_orders": 320097, "delivered_orders": 318202, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.76}, {"month": "2026-02", "site": "MLU", "sold_orders": 6, "delivered_orders": 5, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.8}, {"month": "2026-03", "site": "MLA", "sold_orders": 63402, "delivered_orders": 59348, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.76}, {"month": "2026-03", "site": "MLB", "sold_orders": 1279007, "delivered_orders": 1268238, "not_delivered": 24230, "nd_pct": 1.89, "avg_lead_time": 3.86}, {"month": "2026-03", "site": "MLC", "sold_orders": 22072, "delivered_orders": 22024, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.71}, {"month": "2026-03", "site": "MLM", "sold_orders": 318787, "delivered_orders": 317771, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.71}, {"month": "2026-03", "site": "MLU", "sold_orders": 57, "delivered_orders": 53, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 8.85}, {"month": "2026-04", "site": "MLA", "sold_orders": 19376, "delivered_orders": 17587, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.39}, {"month": "2026-04", "site": "MLB", "sold_orders": 395631, "delivered_orders": 374989, "not_delivered": 4046, "nd_pct": 1.02, "avg_lead_time": 3.63}, {"month": "2026-04", "site": "MLC", "sold_orders": 7249, "delivered_orders": 7211, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.94}, {"month": "2026-04", "site": "MLM", "sold_orders": 82493, "delivered_orders": 81004, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.81}, {"month": "2026-04", "site": "MLU", "sold_orders": 527, "delivered_orders": 513, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.36}], "by_picking": [{"month": "2025-01", "site": "MLB", "picking_type": "unknown", "total_orders": 2, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-01", "site": "MLM", "picking_type": "unknown", "total_orders": 6, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-02", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 2, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 19.5}, {"month": "2025-02", "site": "MLA", "picking_type": "cross_docking", "total_orders": 75, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 6.15}, {"month": "2025-02", "site": "MLA", "picking_type": "drop_off", "total_orders": 89, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 8.3}, {"month": "2025-02", "site": "MLA", "picking_type": "fulfillment", "total_orders": 8, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 7.75}, {"month": "2025-02", "site": "MLB", "picking_type": "cross_docking", "total_orders": 1505, "not_delivered": 21, "nd_pct": 1.4, "avg_lead_time": 6.96}, {"month": "2025-02", "site": "MLB", "picking_type": "drop_off", "total_orders": 56, "not_delivered": 18, "nd_pct": 32.14, "avg_lead_time": 14.39}, {"month": "2025-02", "site": "MLB", "picking_type": "fulfillment", "total_orders": 21, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 9.57}, {"month": "2025-02", "site": "MLC", "picking_type": "cross_docking", "total_orders": 18, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 4.28}, {"month": "2025-02", "site": "MLC", "picking_type": "fulfillment", "total_orders": 1, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.0}, {"month": "2025-02", "site": "MLC", "picking_type": "xd_drop_off", "total_orders": 1, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 4.0}, {"month": "2025-02", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 16, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-02", "site": "MLM", "picking_type": "cross_docking", "total_orders": 1102, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 4.4}, {"month": "2025-02", "site": "MLM", "picking_type": "fulfillment", "total_orders": 88, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.73}, {"month": "2025-02", "site": "MLM", "picking_type": "unknown", "total_orders": 2, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-03", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 8682, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.54}, {"month": "2025-03", "site": "MLA", "picking_type": "cross_docking", "total_orders": 27611, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.85}, {"month": "2025-03", "site": "MLA", "picking_type": "drop_off", "total_orders": 21211, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 4.18}, {"month": "2025-03", "site": "MLA", "picking_type": "fulfillment", "total_orders": 2056, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.72}, {"month": "2025-03", "site": "MLA", "picking_type": "unknown", "total_orders": 475, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-03", "site": "MLB", "picking_type": "cross_docking", "total_orders": 472903, "not_delivered": 5857, "nd_pct": 1.24, "avg_lead_time": 5.47}, {"month": "2025-03", "site": "MLB", "picking_type": "drop_off", "total_orders": 19564, "not_delivered": 2904, "nd_pct": 14.84, "avg_lead_time": 12.84}, {"month": "2025-03", "site": "MLB", "picking_type": "fulfillment", "total_orders": 27722, "not_delivered": 242, "nd_pct": 0.87, "avg_lead_time": 2.61}, {"month": "2025-03", "site": "MLB", "picking_type": "unknown", "total_orders": 2344, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-03", "site": "MLC", "picking_type": "cross_docking", "total_orders": 7086, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.23}, {"month": "2025-03", "site": "MLC", "picking_type": "fulfillment", "total_orders": 259, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.45}, {"month": "2025-03", "site": "MLC", "picking_type": "unknown", "total_orders": 3, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-03", "site": "MLC", "picking_type": "xd_drop_off", "total_orders": 426, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.22}, {"month": "2025-03", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 7035, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.55}, {"month": "2025-03", "site": "MLM", "picking_type": "cross_docking", "total_orders": 164129, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.54}, {"month": "2025-03", "site": "MLM", "picking_type": "fulfillment", "total_orders": 12105, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.38}, {"month": "2025-03", "site": "MLM", "picking_type": "unknown", "total_orders": 604, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-04", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 11834, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.04}, {"month": "2025-04", "site": "MLA", "picking_type": "cross_docking", "total_orders": 26276, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.73}, {"month": "2025-04", "site": "MLA", "picking_type": "drop_off", "total_orders": 22851, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 5.07}, {"month": "2025-04", "site": "MLA", "picking_type": "fulfillment", "total_orders": 2220, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.63}, {"month": "2025-04", "site": "MLA", "picking_type": "unknown", "total_orders": 717, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-04", "site": "MLB", "picking_type": "cross_docking", "total_orders": 440970, "not_delivered": 4871, "nd_pct": 1.1, "avg_lead_time": 5.83}, {"month": "2025-04", "site": "MLB", "picking_type": "drop_off", "total_orders": 23109, "not_delivered": 1587, "nd_pct": 6.87, "avg_lead_time": 15.17}, {"month": "2025-04", "site": "MLB", "picking_type": "fulfillment", "total_orders": 29796, "not_delivered": 269, "nd_pct": 0.9, "avg_lead_time": 2.36}, {"month": "2025-04", "site": "MLB", "picking_type": "unknown", "total_orders": 2559, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-04", "site": "MLC", "picking_type": "cross_docking", "total_orders": 12067, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.47}, {"month": "2025-04", "site": "MLC", "picking_type": "fulfillment", "total_orders": 252, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.63}, {"month": "2025-04", "site": "MLC", "picking_type": "unknown", "total_orders": 2, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-04", "site": "MLC", "picking_type": "xd_drop_off", "total_orders": 305, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.3}, {"month": "2025-04", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 8029, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.83}, {"month": "2025-04", "site": "MLM", "picking_type": "cross_docking", "total_orders": 161316, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 4.06}, {"month": "2025-04", "site": "MLM", "picking_type": "fulfillment", "total_orders": 14872, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.39}, {"month": "2025-04", "site": "MLM", "picking_type": "unknown", "total_orders": 486, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-05", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 7724, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.41}, {"month": "2025-05", "site": "MLA", "picking_type": "cross_docking", "total_orders": 28927, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.66}, {"month": "2025-05", "site": "MLA", "picking_type": "drop_off", "total_orders": 23033, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.59}, {"month": "2025-05", "site": "MLA", "picking_type": "fulfillment", "total_orders": 3643, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.53}, {"month": "2025-05", "site": "MLA", "picking_type": "unknown", "total_orders": 1111, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-05", "site": "MLB", "picking_type": "cross_docking", "total_orders": 413774, "not_delivered": 4576, "nd_pct": 1.11, "avg_lead_time": 6.07}, {"month": "2025-05", "site": "MLB", "picking_type": "drop_off", "total_orders": 19426, "not_delivered": 1382, "nd_pct": 7.11, "avg_lead_time": 16.33}, {"month": "2025-05", "site": "MLB", "picking_type": "fulfillment", "total_orders": 42152, "not_delivered": 399, "nd_pct": 0.95, "avg_lead_time": 2.12}, {"month": "2025-05", "site": "MLB", "picking_type": "unknown", "total_orders": 2434, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-05", "site": "MLC", "picking_type": "cross_docking", "total_orders": 10480, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.34}, {"month": "2025-05", "site": "MLC", "picking_type": "fulfillment", "total_orders": 358, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.66}, {"month": "2025-05", "site": "MLC", "picking_type": "unknown", "total_orders": 12, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-05", "site": "MLC", "picking_type": "xd_drop_off", "total_orders": 252, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.29}, {"month": "2025-05", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 6670, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.13}, {"month": "2025-05", "site": "MLM", "picking_type": "cross_docking", "total_orders": 211657, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.67}, {"month": "2025-05", "site": "MLM", "picking_type": "fulfillment", "total_orders": 21252, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.38}, {"month": "2025-05", "site": "MLM", "picking_type": "unknown", "total_orders": 112, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-06", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 5405, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.87}, {"month": "2025-06", "site": "MLA", "picking_type": "cross_docking", "total_orders": 32163, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.84}, {"month": "2025-06", "site": "MLA", "picking_type": "drop_off", "total_orders": 15931, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.49}, {"month": "2025-06", "site": "MLA", "picking_type": "fulfillment", "total_orders": 2954, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.42}, {"month": "2025-06", "site": "MLA", "picking_type": "unknown", "total_orders": 903, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-06", "site": "MLB", "picking_type": "SAMEDAY", "total_orders": 212, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.9}, {"month": "2025-06", "site": "MLB", "picking_type": "cross_docking", "total_orders": 576613, "not_delivered": 7584, "nd_pct": 1.32, "avg_lead_time": 5.78}, {"month": "2025-06", "site": "MLB", "picking_type": "drop_off", "total_orders": 10730, "not_delivered": 678, "nd_pct": 6.32, "avg_lead_time": 15.96}, {"month": "2025-06", "site": "MLB", "picking_type": "fulfillment", "total_orders": 39616, "not_delivered": 430, "nd_pct": 1.09, "avg_lead_time": 2.87}, {"month": "2025-06", "site": "MLB", "picking_type": "unknown", "total_orders": 2316, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-06", "site": "MLC", "picking_type": "cross_docking", "total_orders": 11185, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.26}, {"month": "2025-06", "site": "MLC", "picking_type": "fulfillment", "total_orders": 781, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.4}, {"month": "2025-06", "site": "MLC", "picking_type": "unknown", "total_orders": 9, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-06", "site": "MLC", "picking_type": "xd_drop_off", "total_orders": 167, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.25}, {"month": "2025-06", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 9374, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.22}, {"month": "2025-06", "site": "MLM", "picking_type": "cross_docking", "total_orders": 193201, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.7}, {"month": "2025-06", "site": "MLM", "picking_type": "fulfillment", "total_orders": 18427, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.41}, {"month": "2025-06", "site": "MLM", "picking_type": "unknown", "total_orders": 100, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-07", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 5615, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.65}, {"month": "2025-07", "site": "MLA", "picking_type": "cross_docking", "total_orders": 39737, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.58}, {"month": "2025-07", "site": "MLA", "picking_type": "drop_off", "total_orders": 15335, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.37}, {"month": "2025-07", "site": "MLA", "picking_type": "fulfillment", "total_orders": 2895, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.31}, {"month": "2025-07", "site": "MLA", "picking_type": "unknown", "total_orders": 2882, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-07", "site": "MLB", "picking_type": "SAMEDAY", "total_orders": 736, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.61}, {"month": "2025-07", "site": "MLB", "picking_type": "cross_docking", "total_orders": 655131, "not_delivered": 9060, "nd_pct": 1.38, "avg_lead_time": 7.95}, {"month": "2025-07", "site": "MLB", "picking_type": "drop_off", "total_orders": 7860, "not_delivered": 541, "nd_pct": 6.88, "avg_lead_time": 14.96}, {"month": "2025-07", "site": "MLB", "picking_type": "fulfillment", "total_orders": 41847, "not_delivered": 435, "nd_pct": 1.04, "avg_lead_time": 2.97}, {"month": "2025-07", "site": "MLB", "picking_type": "self_service", "total_orders": 208, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.12}, {"month": "2025-07", "site": "MLB", "picking_type": "unknown", "total_orders": 3023, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-07", "site": "MLC", "picking_type": "cross_docking", "total_orders": 12343, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.26}, {"month": "2025-07", "site": "MLC", "picking_type": "fulfillment", "total_orders": 724, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.41}, {"month": "2025-07", "site": "MLC", "picking_type": "unknown", "total_orders": 11, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-07", "site": "MLC", "picking_type": "xd_drop_off", "total_orders": 142, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.14}, {"month": "2025-07", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 9943, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.14}, {"month": "2025-07", "site": "MLM", "picking_type": "cross_docking", "total_orders": 173547, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.38}, {"month": "2025-07", "site": "MLM", "picking_type": "fulfillment", "total_orders": 22578, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.47}, {"month": "2025-07", "site": "MLM", "picking_type": "unknown", "total_orders": 684, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-08", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 9542, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.12}, {"month": "2025-08", "site": "MLA", "picking_type": "cross_docking", "total_orders": 34205, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.66}, {"month": "2025-08", "site": "MLA", "picking_type": "drop_off", "total_orders": 14810, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.18}, {"month": "2025-08", "site": "MLA", "picking_type": "fulfillment", "total_orders": 3127, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.23}, {"month": "2025-08", "site": "MLA", "picking_type": "unknown", "total_orders": 1172, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-08", "site": "MLB", "picking_type": "SAMEDAY", "total_orders": 1216, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.94}, {"month": "2025-08", "site": "MLB", "picking_type": "cross_docking", "total_orders": 775123, "not_delivered": 13724, "nd_pct": 1.77, "avg_lead_time": 4.28}, {"month": "2025-08", "site": "MLB", "picking_type": "drop_off", "total_orders": 5419, "not_delivered": 322, "nd_pct": 5.94, "avg_lead_time": 26.5}, {"month": "2025-08", "site": "MLB", "picking_type": "fulfillment", "total_orders": 40729, "not_delivered": 363, "nd_pct": 0.89, "avg_lead_time": 2.31}, {"month": "2025-08", "site": "MLB", "picking_type": "self_service", "total_orders": 1714, "not_delivered": 4, "nd_pct": 0.23, "avg_lead_time": 1.1}, {"month": "2025-08", "site": "MLB", "picking_type": "unknown", "total_orders": 3335, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-08", "site": "MLC", "picking_type": "cross_docking", "total_orders": 12592, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.49}, {"month": "2025-08", "site": "MLC", "picking_type": "fulfillment", "total_orders": 746, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.6}, {"month": "2025-08", "site": "MLC", "picking_type": "unknown", "total_orders": 4, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-08", "site": "MLC", "picking_type": "xd_drop_off", "total_orders": 137, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.37}, {"month": "2025-08", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 10655, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.65}, {"month": "2025-08", "site": "MLM", "picking_type": "cross_docking", "total_orders": 189642, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.44}, {"month": "2025-08", "site": "MLM", "picking_type": "fulfillment", "total_orders": 22790, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.57}, {"month": "2025-08", "site": "MLM", "picking_type": "unknown", "total_orders": 809, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-09", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 9082, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.99}, {"month": "2025-09", "site": "MLA", "picking_type": "cross_docking", "total_orders": 34467, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.57}, {"month": "2025-09", "site": "MLA", "picking_type": "drop_off", "total_orders": 13367, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.11}, {"month": "2025-09", "site": "MLA", "picking_type": "fulfillment", "total_orders": 3158, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.2}, {"month": "2025-09", "site": "MLA", "picking_type": "unknown", "total_orders": 2249, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-09", "site": "MLB", "picking_type": "SAMEDAY", "total_orders": 5489, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 8.98}, {"month": "2025-09", "site": "MLB", "picking_type": "cross_docking", "total_orders": 926044, "not_delivered": 13822, "nd_pct": 1.49, "avg_lead_time": 3.68}, {"month": "2025-09", "site": "MLB", "picking_type": "drop_off", "total_orders": 5188, "not_delivered": 368, "nd_pct": 7.09, "avg_lead_time": 26.28}, {"month": "2025-09", "site": "MLB", "picking_type": "fulfillment", "total_orders": 46668, "not_delivered": 420, "nd_pct": 0.9, "avg_lead_time": 1.98}, {"month": "2025-09", "site": "MLB", "picking_type": "self_service", "total_orders": 22, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-09", "site": "MLB", "picking_type": "unknown", "total_orders": 6337, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-09", "site": "MLC", "picking_type": "cross_docking", "total_orders": 13875, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.36}, {"month": "2025-09", "site": "MLC", "picking_type": "fulfillment", "total_orders": 773, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.56}, {"month": "2025-09", "site": "MLC", "picking_type": "unknown", "total_orders": 7, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-09", "site": "MLC", "picking_type": "xd_drop_off", "total_orders": 136, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.44}, {"month": "2025-09", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 10881, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.95}, {"month": "2025-09", "site": "MLM", "picking_type": "cross_docking", "total_orders": 193820, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.67}, {"month": "2025-09", "site": "MLM", "picking_type": "fulfillment", "total_orders": 26591, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.47}, {"month": "2025-09", "site": "MLM", "picking_type": "unknown", "total_orders": 402, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-10", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 8917, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.0}, {"month": "2025-10", "site": "MLA", "picking_type": "cross_docking", "total_orders": 44422, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.73}, {"month": "2025-10", "site": "MLA", "picking_type": "drop_off", "total_orders": 13342, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.41}, {"month": "2025-10", "site": "MLA", "picking_type": "fulfillment", "total_orders": 2289, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.31}, {"month": "2025-10", "site": "MLA", "picking_type": "unknown", "total_orders": 1272, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-10", "site": "MLB", "picking_type": "SAMEDAY", "total_orders": 2888, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.6}, {"month": "2025-10", "site": "MLB", "picking_type": "cross_docking", "total_orders": 1272802, "not_delivered": 15551, "nd_pct": 1.22, "avg_lead_time": 3.92}, {"month": "2025-10", "site": "MLB", "picking_type": "drop_off", "total_orders": 5411, "not_delivered": 440, "nd_pct": 8.13, "avg_lead_time": 24.04}, {"month": "2025-10", "site": "MLB", "picking_type": "fulfillment", "total_orders": 45320, "not_delivered": 379, "nd_pct": 0.84, "avg_lead_time": 2.21}, {"month": "2025-10", "site": "MLB", "picking_type": "unknown", "total_orders": 5130, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-10", "site": "MLC", "picking_type": "cross_docking", "total_orders": 16972, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.34}, {"month": "2025-10", "site": "MLC", "picking_type": "fulfillment", "total_orders": 1004, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.64}, {"month": "2025-10", "site": "MLC", "picking_type": "unknown", "total_orders": 13, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-10", "site": "MLC", "picking_type": "xd_drop_off", "total_orders": 134, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.15}, {"month": "2025-10", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 11815, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.57}, {"month": "2025-10", "site": "MLM", "picking_type": "cross_docking", "total_orders": 274324, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.04}, {"month": "2025-10", "site": "MLM", "picking_type": "fulfillment", "total_orders": 26763, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.58}, {"month": "2025-10", "site": "MLM", "picking_type": "unknown", "total_orders": 1145, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-11", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 7889, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.7}, {"month": "2025-11", "site": "MLA", "picking_type": "cross_docking", "total_orders": 37760, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.95}, {"month": "2025-11", "site": "MLA", "picking_type": "drop_off", "total_orders": 12498, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.29}, {"month": "2025-11", "site": "MLA", "picking_type": "fulfillment", "total_orders": 2572, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.31}, {"month": "2025-11", "site": "MLA", "picking_type": "unknown", "total_orders": 1885, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-11", "site": "MLB", "picking_type": "SAMEDAY", "total_orders": 3072, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.43}, {"month": "2025-11", "site": "MLB", "picking_type": "cross_docking", "total_orders": 1276047, "not_delivered": 20007, "nd_pct": 1.57, "avg_lead_time": 4.02}, {"month": "2025-11", "site": "MLB", "picking_type": "drop_off", "total_orders": 4799, "not_delivered": 394, "nd_pct": 8.21, "avg_lead_time": 30.86}, {"month": "2025-11", "site": "MLB", "picking_type": "fulfillment", "total_orders": 43205, "not_delivered": 447, "nd_pct": 1.03, "avg_lead_time": 2.33}, {"month": "2025-11", "site": "MLB", "picking_type": "unknown", "total_orders": 3396, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-11", "site": "MLC", "picking_type": "cross_docking", "total_orders": 18587, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.82}, {"month": "2025-11", "site": "MLC", "picking_type": "fulfillment", "total_orders": 939, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.62}, {"month": "2025-11", "site": "MLC", "picking_type": "unknown", "total_orders": 6, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-11", "site": "MLC", "picking_type": "xd_drop_off", "total_orders": 145, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.07}, {"month": "2025-11", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 16509, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.85}, {"month": "2025-11", "site": "MLM", "picking_type": "cross_docking", "total_orders": 338748, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 4.29}, {"month": "2025-11", "site": "MLM", "picking_type": "fulfillment", "total_orders": 40119, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.77}, {"month": "2025-11", "site": "MLM", "picking_type": "unknown", "total_orders": 1247, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-12", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 6703, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.07}, {"month": "2025-12", "site": "MLA", "picking_type": "cross_docking", "total_orders": 38440, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.65}, {"month": "2025-12", "site": "MLA", "picking_type": "drop_off", "total_orders": 11940, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.84}, {"month": "2025-12", "site": "MLA", "picking_type": "fulfillment", "total_orders": 2015, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.84}, {"month": "2025-12", "site": "MLA", "picking_type": "unknown", "total_orders": 1315, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-12", "site": "MLB", "picking_type": "SAMEDAY", "total_orders": 3177, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.46}, {"month": "2025-12", "site": "MLB", "picking_type": "cross_docking", "total_orders": 1046750, "not_delivered": 18149, "nd_pct": 1.73, "avg_lead_time": 5.02}, {"month": "2025-12", "site": "MLB", "picking_type": "drop_off", "total_orders": 4035, "not_delivered": 291, "nd_pct": 7.21, "avg_lead_time": 19.18}, {"month": "2025-12", "site": "MLB", "picking_type": "fulfillment", "total_orders": 49669, "not_delivered": 487, "nd_pct": 0.98, "avg_lead_time": 3.18}, {"month": "2025-12", "site": "MLB", "picking_type": "unknown", "total_orders": 3427, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-12", "site": "MLC", "picking_type": "cross_docking", "total_orders": 19754, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.15}, {"month": "2025-12", "site": "MLC", "picking_type": "fulfillment", "total_orders": 1112, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.86}, {"month": "2025-12", "site": "MLC", "picking_type": "unknown", "total_orders": 4, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2025-12", "site": "MLC", "picking_type": "xd_drop_off", "total_orders": 80, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.44}, {"month": "2025-12", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 11795, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.83}, {"month": "2025-12", "site": "MLM", "picking_type": "cross_docking", "total_orders": 249598, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.81}, {"month": "2025-12", "site": "MLM", "picking_type": "fulfillment", "total_orders": 29537, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.79}, {"month": "2025-12", "site": "MLM", "picking_type": "unknown", "total_orders": 616, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-01", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 7891, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.21}, {"month": "2026-01", "site": "MLA", "picking_type": "cross_docking", "total_orders": 40057, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.72}, {"month": "2026-01", "site": "MLA", "picking_type": "drop_off", "total_orders": 11908, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.3}, {"month": "2026-01", "site": "MLA", "picking_type": "fulfillment", "total_orders": 2278, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.16}, {"month": "2026-01", "site": "MLA", "picking_type": "unknown", "total_orders": 1919, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-01", "site": "MLB", "picking_type": "SAMEDAY", "total_orders": 4579, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.45}, {"month": "2026-01", "site": "MLB", "picking_type": "cross_docking", "total_orders": 1258388, "not_delivered": 20511, "nd_pct": 1.63, "avg_lead_time": 4.11}, {"month": "2026-01", "site": "MLB", "picking_type": "drop_off", "total_orders": 4835, "not_delivered": 398, "nd_pct": 8.23, "avg_lead_time": 19.35}, {"month": "2026-01", "site": "MLB", "picking_type": "fulfillment", "total_orders": 46555, "not_delivered": 476, "nd_pct": 1.02, "avg_lead_time": 2.66}, {"month": "2026-01", "site": "MLB", "picking_type": "unknown", "total_orders": 3635, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-01", "site": "MLC", "picking_type": "cross_docking", "total_orders": 19106, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.94}, {"month": "2026-01", "site": "MLC", "picking_type": "fulfillment", "total_orders": 985, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.9}, {"month": "2026-01", "site": "MLC", "picking_type": "unknown", "total_orders": 16, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-01", "site": "MLC", "picking_type": "xd_drop_off", "total_orders": 60, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.66}, {"month": "2026-01", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 11088, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.67}, {"month": "2026-01", "site": "MLM", "picking_type": "cross_docking", "total_orders": 239885, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.93}, {"month": "2026-01", "site": "MLM", "picking_type": "fulfillment", "total_orders": 28273, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.65}, {"month": "2026-01", "site": "MLM", "picking_type": "unknown", "total_orders": 1777, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-02", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 8825, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.52}, {"month": "2026-02", "site": "MLA", "picking_type": "cross_docking", "total_orders": 45347, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.0}, {"month": "2026-02", "site": "MLA", "picking_type": "drop_off", "total_orders": 11427, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 4.24}, {"month": "2026-02", "site": "MLA", "picking_type": "fulfillment", "total_orders": 2890, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.4}, {"month": "2026-02", "site": "MLA", "picking_type": "unknown", "total_orders": 3727, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-02", "site": "MLB", "picking_type": "SAMEDAY", "total_orders": 4304, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.42}, {"month": "2026-02", "site": "MLB", "picking_type": "cross_docking", "total_orders": 1268545, "not_delivered": 27867, "nd_pct": 2.2, "avg_lead_time": 4.24}, {"month": "2026-02", "site": "MLB", "picking_type": "drop_off", "total_orders": 4452, "not_delivered": 301, "nd_pct": 6.76, "avg_lead_time": 19.14}, {"month": "2026-02", "site": "MLB", "picking_type": "fulfillment", "total_orders": 39899, "not_delivered": 394, "nd_pct": 0.99, "avg_lead_time": 2.23}, {"month": "2026-02", "site": "MLB", "picking_type": "unknown", "total_orders": 3391, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-02", "site": "MLC", "picking_type": "cross_docking", "total_orders": 18032, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.91}, {"month": "2026-02", "site": "MLC", "picking_type": "fulfillment", "total_orders": 904, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.61}, {"month": "2026-02", "site": "MLC", "picking_type": "unknown", "total_orders": 4, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-02", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 13786, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.71}, {"month": "2026-02", "site": "MLM", "picking_type": "cross_docking", "total_orders": 281186, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.88}, {"month": "2026-02", "site": "MLM", "picking_type": "fulfillment", "total_orders": 23510, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.64}, {"month": "2026-02", "site": "MLM", "picking_type": "unknown", "total_orders": 1615, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-02", "site": "MLU", "picking_type": "cross_docking", "total_orders": 6, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.8}, {"month": "2026-03", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 8486, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.66}, {"month": "2026-03", "site": "MLA", "picking_type": "cross_docking", "total_orders": 36638, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.57}, {"month": "2026-03", "site": "MLA", "picking_type": "drop_off", "total_orders": 11908, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.54}, {"month": "2026-03", "site": "MLA", "picking_type": "fulfillment", "total_orders": 2450, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.07}, {"month": "2026-03", "site": "MLA", "picking_type": "unknown", "total_orders": 3920, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-03", "site": "MLB", "picking_type": "SAMEDAY", "total_orders": 3907, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.45}, {"month": "2026-03", "site": "MLB", "picking_type": "cross_docking", "total_orders": 1188203, "not_delivered": 23016, "nd_pct": 1.94, "avg_lead_time": 3.92}, {"month": "2026-03", "site": "MLB", "picking_type": "drop_off", "total_orders": 4250, "not_delivered": 263, "nd_pct": 6.19, "avg_lead_time": 13.93}, {"month": "2026-03", "site": "MLB", "picking_type": "fulfillment", "total_orders": 78757, "not_delivered": 951, "nd_pct": 1.21, "avg_lead_time": 2.45}, {"month": "2026-03", "site": "MLB", "picking_type": "unknown", "total_orders": 3890, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-03", "site": "MLC", "picking_type": "cross_docking", "total_orders": 20976, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.72}, {"month": "2026-03", "site": "MLC", "picking_type": "fulfillment", "total_orders": 1093, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.57}, {"month": "2026-03", "site": "MLC", "picking_type": "unknown", "total_orders": 3, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-03", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 13910, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.79}, {"month": "2026-03", "site": "MLM", "picking_type": "cross_docking", "total_orders": 275558, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.85}, {"month": "2026-03", "site": "MLM", "picking_type": "fulfillment", "total_orders": 28666, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.59}, {"month": "2026-03", "site": "MLM", "picking_type": "unknown", "total_orders": 653, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-03", "site": "MLU", "picking_type": "cross_docking", "total_orders": 55, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 8.85}, {"month": "2026-03", "site": "MLU", "picking_type": "unknown", "total_orders": 2, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-04", "site": "MLA", "picking_type": "SAMEDAY", "total_orders": 2702, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.87}, {"month": "2026-04", "site": "MLA", "picking_type": "cross_docking", "total_orders": 11380, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 3.18}, {"month": "2026-04", "site": "MLA", "picking_type": "drop_off", "total_orders": 3647, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 4.72}, {"month": "2026-04", "site": "MLA", "picking_type": "fulfillment", "total_orders": 592, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.39}, {"month": "2026-04", "site": "MLA", "picking_type": "unknown", "total_orders": 1055, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-04", "site": "MLB", "picking_type": "SAMEDAY", "total_orders": 1229, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.52}, {"month": "2026-04", "site": "MLB", "picking_type": "cross_docking", "total_orders": 366222, "not_delivered": 3816, "nd_pct": 1.04, "avg_lead_time": 3.72}, {"month": "2026-04", "site": "MLB", "picking_type": "drop_off", "total_orders": 1439, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 8.81}, {"month": "2026-04", "site": "MLB", "picking_type": "fulfillment", "total_orders": 25918, "not_delivered": 230, "nd_pct": 0.89, "avg_lead_time": 2.19}, {"month": "2026-04", "site": "MLB", "picking_type": "unknown", "total_orders": 823, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-04", "site": "MLC", "picking_type": "cross_docking", "total_orders": 6840, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.95}, {"month": "2026-04", "site": "MLC", "picking_type": "fulfillment", "total_orders": 408, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.61}, {"month": "2026-04", "site": "MLC", "picking_type": "unknown", "total_orders": 1, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-04", "site": "MLM", "picking_type": "SAMEDAY", "total_orders": 4746, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.58}, {"month": "2026-04", "site": "MLM", "picking_type": "cross_docking", "total_orders": 69734, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.95}, {"month": "2026-04", "site": "MLM", "picking_type": "fulfillment", "total_orders": 7876, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 1.49}, {"month": "2026-04", "site": "MLM", "picking_type": "unknown", "total_orders": 137, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": null}, {"month": "2026-04", "site": "MLU", "picking_type": "cross_docking", "total_orders": 447, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.34}, {"month": "2026-04", "site": "MLU", "picking_type": "xd_drop_off", "total_orders": 80, "not_delivered": 0, "nd_pct": 0.0, "avg_lead_time": 2.44}], "top3_states": [{"site": "MLA", "state": "AR-B", "total_orders": 303976, "avg_lead_time": 2.48, "rn": 1}, {"site": "MLA", "state": "AR-X", "total_orders": 88737, "avg_lead_time": 2.97, "rn": 2}, {"site": "MLA", "state": "AR-C", "total_orders": 79580, "avg_lead_time": 2.29, "rn": 3}, {"site": "MLB", "state": "BR-SP", "total_orders": 3636671, "avg_lead_time": 3.15, "rn": 1}, {"site": "MLB", "state": "BR-RJ", "total_orders": 1266859, "avg_lead_time": 3.34, "rn": 2}, {"site": "MLB", "state": "BR-MG", "total_orders": 1258287, "avg_lead_time": 4.17, "rn": 3}, {"site": "MLC", "state": "CL-RM", "total_orders": 85887, "avg_lead_time": 1.85, "rn": 1}, {"site": "MLC", "state": "CL-VS", "total_orders": 25748, "avg_lead_time": 1.88, "rn": 2}, {"site": "MLC", "state": "CL-BI", "total_orders": 18079, "avg_lead_time": 1.96, "rn": 3}, {"site": "MLM", "state": "MX-MEX", "total_orders": 517108, "avg_lead_time": 2.46, "rn": 1}, {"site": "MLM", "state": "MX-DIF", "total_orders": 406813, "avg_lead_time": 2.44, "rn": 2}, {"site": "MLM", "state": "MX-JAL", "total_orders": 309344, "avg_lead_time": 2.55, "rn": 3}, {"site": "MLU", "state": "UY-MO", "total_orders": 302, "avg_lead_time": 3.42, "rn": 1}, {"site": "MLU", "state": "UY-CA", "total_orders": 111, "avg_lead_time": 2.37, "rn": 2}, {"site": "MLU", "state": "UY-MA", "total_orders": 40, "avg_lead_time": 2.45, "rn": 3}], "top3_by_picking": [{"site": "MLA", "state": "AR-B", "picking_type": "SAMEDAY", "total_orders": 45940, "avg_lead_time": 2.66}, {"site": "MLA", "state": "AR-B", "picking_type": "cross_docking", "total_orders": 169010, "avg_lead_time": 2.15}, {"site": "MLA", "state": "AR-B", "picking_type": "drop_off", "total_orders": 76788, "avg_lead_time": 3.27}, {"site": "MLA", "state": "AR-B", "picking_type": "fulfillment", "total_orders": 12238, "avg_lead_time": 1.62}, {"site": "MLA", "state": "AR-C", "picking_type": "SAMEDAY", "total_orders": 22371, "avg_lead_time": 2.28}, {"site": "MLA", "state": "AR-C", "picking_type": "cross_docking", "total_orders": 30388, "avg_lead_time": 2.04}, {"site": "MLA", "state": "AR-C", "picking_type": "drop_off", "total_orders": 23491, "avg_lead_time": 2.73}, {"site": "MLA", "state": "AR-C", "picking_type": "fulfillment", "total_orders": 3330, "avg_lead_time": 1.45}, {"site": "MLA", "state": "AR-X", "picking_type": "SAMEDAY", "total_orders": 7886, "avg_lead_time": 2.87}, {"site": "MLA", "state": "AR-X", "picking_type": "cross_docking", "total_orders": 53056, "avg_lead_time": 2.53}, {"site": "MLA", "state": "AR-X", "picking_type": "drop_off", "total_orders": 24517, "avg_lead_time": 4.08}, {"site": "MLA", "state": "AR-X", "picking_type": "fulfillment", "total_orders": 3278, "avg_lead_time": 1.98}, {"site": "MLB", "state": "BR-MG", "picking_type": "cross_docking", "total_orders": 1199285, "avg_lead_time": 4.25}, {"site": "MLB", "state": "BR-MG", "picking_type": "fulfillment", "total_orders": 59002, "avg_lead_time": 2.37}, {"site": "MLB", "state": "BR-RJ", "picking_type": "cross_docking", "total_orders": 1200714, "avg_lead_time": 3.41}, {"site": "MLB", "state": "BR-RJ", "picking_type": "fulfillment", "total_orders": 66145, "avg_lead_time": 1.84}, {"site": "MLB", "state": "BR-SP", "picking_type": "cross_docking", "total_orders": 3422919, "avg_lead_time": 3.23}, {"site": "MLB", "state": "BR-SP", "picking_type": "fulfillment", "total_orders": 211808, "avg_lead_time": 1.72}, {"site": "MLB", "state": "BR-SP", "picking_type": "self_service", "total_orders": 1944, "avg_lead_time": 1.11}, {"site": "MLC", "state": "CL-BI", "picking_type": "cross_docking", "total_orders": 17012, "avg_lead_time": 1.98}, {"site": "MLC", "state": "CL-BI", "picking_type": "fulfillment", "total_orders": 873, "avg_lead_time": 1.48}, {"site": "MLC", "state": "CL-BI", "picking_type": "xd_drop_off", "total_orders": 194, "avg_lead_time": 2.08}, {"site": "MLC", "state": "CL-RM", "picking_type": "cross_docking", "total_orders": 81740, "avg_lead_time": 1.87}, {"site": "MLC", "state": "CL-RM", "picking_type": "fulfillment", "total_orders": 3503, "avg_lead_time": 1.25}, {"site": "MLC", "state": "CL-RM", "picking_type": "xd_drop_off", "total_orders": 644, "avg_lead_time": 1.99}, {"site": "MLC", "state": "CL-VS", "picking_type": "cross_docking", "total_orders": 24232, "avg_lead_time": 1.9}, {"site": "MLC", "state": "CL-VS", "picking_type": "fulfillment", "total_orders": 1273, "avg_lead_time": 1.33}, {"site": "MLC", "state": "CL-VS", "picking_type": "xd_drop_off", "total_orders": 243, "avg_lead_time": 2.13}, {"site": "MLM", "state": "MX-DIF", "picking_type": "SAMEDAY", "total_orders": 73244, "avg_lead_time": 1.96}, {"site": "MLM", "state": "MX-DIF", "picking_type": "cross_docking", "total_orders": 299099, "avg_lead_time": 2.62}, {"site": "MLM", "state": "MX-DIF", "picking_type": "fulfillment", "total_orders": 34470, "avg_lead_time": 1.19}, {"site": "MLM", "state": "MX-JAL", "picking_type": "SAMEDAY", "total_orders": 24987, "avg_lead_time": 1.98}, {"site": "MLM", "state": "MX-JAL", "picking_type": "cross_docking", "total_orders": 251620, "avg_lead_time": 2.72}, {"site": "MLM", "state": "MX-JAL", "picking_type": "fulfillment", "total_orders": 32737, "avg_lead_time": 1.26}, {"site": "MLM", "state": "MX-MEX", "picking_type": "SAMEDAY", "total_orders": 30082, "avg_lead_time": 1.94}, {"site": "MLM", "state": "MX-MEX", "picking_type": "cross_docking", "total_orders": 441030, "avg_lead_time": 2.59}, {"site": "MLM", "state": "MX-MEX", "picking_type": "fulfillment", "total_orders": 45996, "avg_lead_time": 1.25}, {"site": "MLU", "state": "UY-CA", "picking_type": "cross_docking", "total_orders": 99, "avg_lead_time": 2.33}, {"site": "MLU", "state": "UY-CA", "picking_type": "xd_drop_off", "total_orders": 12, "avg_lead_time": 2.73}, {"site": "MLU", "state": "UY-MA", "picking_type": "cross_docking", "total_orders": 39, "avg_lead_time": 2.45}, {"site": "MLU", "state": "UY-MA", "picking_type": "xd_drop_off", "total_orders": 1, "avg_lead_time": null}, {"site": "MLU", "state": "UY-MO", "picking_type": "cross_docking", "total_orders": 251, "avg_lead_time": 3.63}, {"site": "MLU", "state": "UY-MO", "picking_type": "xd_drop_off", "total_orders": 51, "avg_lead_time": 2.28}], "pareto_nd": [{"site": "MLB", "motivo": "RECHAZÓ PAQUETE", "cnt": 43435, "site_total": 204245, "pct": 21.27}, {"site": "MLB", "motivo": "DOMICILIO INCORRECTO", "cnt": 34632, "site_total": 204245, "pct": 16.96}, {"site": "MLB", "motivo": "PERDIDA TOTAL", "cnt": 31973, "site_total": 204245, "pct": 15.65}, {"site": "MLB", "motivo": "from_other_station", "cnt": 21169, "site_total": 204245, "pct": 10.36}, {"site": "MLB", "motivo": "sem motivo", "cnt": 18836, "site_total": 204245, "pct": 9.22}, {"site": "MLB", "motivo": "DESTINATARIO AUSENTE", "cnt": 13941, "site_total": 204245, "pct": 6.83}, {"site": "MLB", "motivo": "logistics_canceled", "cnt": 9046, "site_total": 204245, "pct": 4.43}, {"site": "MLB", "motivo": "CLIENTE NO IDENTIFICADO", "cnt": 8654, "site_total": 204245, "pct": 4.24}, {"site": "MLB", "motivo": "outside_coverage", "cnt": 8551, "site_total": 204245, "pct": 4.19}, {"site": "MLB", "motivo": "NAO RECOLHEU O PACOTE", "cnt": 6520, "site_total": 204245, "pct": 3.19}, {"site": "MLB", "motivo": "ROBO DE CARGA", "cnt": 3641, "site_total": 204245, "pct": 1.78}, {"site": "MLB", "motivo": "incorrect_direction", "cnt": 2069, "site_total": 204245, "pct": 1.01}, {"site": "MLB", "motivo": "DAÑO TOTAL", "cnt": 675, "site_total": 204245, "pct": 0.33}, {"site": "MLB", "motivo": "left_by_customer", "cnt": 503, "site_total": 204245, "pct": 0.25}, {"site": "MLB", "motivo": "absent_customer", "cnt": 178, "site_total": 204245, "pct": 0.09}, {"site": "MLB", "motivo": "oversized", "cnt": 141, "site_total": 204245, "pct": 0.07}, {"site": "MLB", "motivo": "refused_by_buyer", "cnt": 76, "site_total": 204245, "pct": 0.04}, {"site": "MLB", "motivo": "fraud", "cnt": 70, "site_total": 204245, "pct": 0.03}, {"site": "MLB", "motivo": "ZONA INTRANSITABLE", "cnt": 39, "site_total": 204245, "pct": 0.02}, {"site": "MLB", "motivo": "damaged_at_origin", "cnt": 25, "site_total": 204245, "pct": 0.01}, {"site": "MLB", "motivo": "damaged_at_station", "cnt": 24, "site_total": 204245, "pct": 0.01}, {"site": "MLB", "motivo": "damaged_in_route", "cnt": 22, "site_total": 204245, "pct": 0.01}, {"site": "MLB", "motivo": "closed_business", "cnt": 9, "site_total": 204245, "pct": 0.0}, {"site": "MLB", "motivo": "ENVÍO CONFISCADO", "cnt": 7, "site_total": 204245, "pct": 0.0}, {"site": "MLB", "motivo": "ZONA PELIGROSA", "cnt": 6, "site_total": 204245, "pct": 0.0}, {"site": "MLB", "motivo": "RECHAZADO POR PAQUETE DAÑADO", "cnt": 1, "site_total": 204245, "pct": 0.0}, {"site": "MLB", "motivo": "PERSONA NO AUTORIZADA", "cnt": 1, "site_total": 204245, "pct": 0.0}, {"site": "MLB", "motivo": "RECHAZADO POR EXCESO DE PESO Y/O MEDIDAS", "cnt": 1, "site_total": 204245, "pct": 0.0}]};
+
+// ── Paleta ───────────────────────────────────────────────────────────────────
+const PALETTE = [
+  "#2D73F5","#FF7A00","#00C48C","#9747FF","#FF4D4F",
+  "#607D8B","#FFC107","#8BC34A","#00BCD4","#E91E63"
+];
+const SITE_COLOR = {
+  MLB:"#2D73F5", MLC:"#FF7A00", MLM:"#00C48C", MLA:"#9747FF", MLU:"#FF4D4F"
+};
+function ax(c, a) { return c + Math.round(a*255).toString(16).padStart(2,"0"); }
+function colorFor(i) { return PALETTE[i % PALETTE.length]; }
+function fmtN(n) {
+  if (n == null) return "—";
+  if (n >= 1e6) return (n/1e6).toFixed(1)+"M";
+  if (n >= 1e3) return (n/1e3).toFixed(1)+"K";
+  return typeof n === "number" ? n.toLocaleString("pt-BR") : String(n);
+}
+
+// ── Sistema de abas ──────────────────────────────────────────────────────────
+const INITED = {};
+function showTab(id) {
+  document.querySelectorAll(".tab-pane").forEach(p => p.style.display = "none");
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById(id).style.display = "block";
+  document.querySelector("[data-tab='" + id + "']").classList.add("active");
+  if (!INITED[id]) { INITED[id] = true; INIT_FNS[id](); }
+}
+
+// ── KPIs ─────────────────────────────────────────────────────────────────────
+const kpis = DATA.kpis;
+document.getElementById("kpi-grid").innerHTML = [
+  { cls:"c-blue",   lbl:"Pedidos Vendidos",  val:fmtN(kpis.total_sold),          sub:"Todos os países · período completo" },
+  { cls:"c-green",  lbl:"Pedidos Entregues", val:fmtN(kpis.total_delivered),     sub:"Com data de entrega registrada" },
+  { cls:"c-red",    lbl:"Not Delivered",      val:(kpis.nd_pct||0)+"%",           sub:fmtN(kpis.total_nd)+" pedidos" },
+  { cls:"c-orange", lbl:"Lead Time Médio",    val:(kpis.avg_lead_time||"—")+"d", sub:"Dias corridos · todos os países" },
+].map(k =>
+  '<div class="kpi ' + k.cls + '">' +
+  '<div class="lbl">' + k.lbl + '</div>' +
+  '<div class="val">' + k.val + '</div>' +
+  '<div class="sub">' + k.sub + '</div></div>'
+).join("");
+
+// ── Helpers de gráfico de linhas ─────────────────────────────────────────────
+function mkLineChart(id, datasets, yLabel, isPct) {
+  new Chart(document.getElementById(id), {
+    type: "line",
+    data: { labels: DATA._months, datasets: datasets },
+    options: {
+      responsive: true,
+      interaction: { mode:"index", intersect:false },
+      plugins: {
+        legend: { position:"top", labels:{ font:{ size:11 }, boxWidth:14 } },
+        tooltip: { callbacks: { label: ctx =>
+          " " + ctx.dataset.label + ": " + (isPct ? ctx.parsed.y+"%" : fmtN(ctx.parsed.y))
+        } }
+      },
+      scales: {
+        x: { ticks:{ maxRotation:45, font:{ size:10 } } },
+        y: { beginAtZero:true, title:{ display:true, text:yLabel, font:{ size:11 } } }
+      }
+    }
+  });
+}
+
+function siteDatasets(key) {
+  return DATA._sites.map((site, i) => {
+    const vals = DATA._months.map(m => {
+      const r = DATA.by_month_country.find(x => x.month === m && x.site === site);
+      return r ? r[key] : null;
+    });
+    const c = SITE_COLOR[site] || colorFor(i);
+    return {
+      label: site, data: vals,
+      borderColor: c, backgroundColor: ax(c, 0.08),
+      borderWidth: 2, tension: 0.3, spanGaps: true,
+      pointRadius: 3, pointHoverRadius: 5
+    };
+  });
+}
+
+// ── Pré-calcula listas globais ───────────────────────────────────────────────
+DATA._months = [...new Set(DATA.by_month_country.map(r => r.month))].sort();
+DATA._sites  = [...new Set(DATA.by_month_country.map(r => r.site))].sort();
+
+// ── Init: Visão Geral ────────────────────────────────────────────────────────
+function initGeral() {
+  mkLineChart("chart-sold",      siteDatasets("sold_orders"),      "Pedidos",       false);
+  mkLineChart("chart-delivered", siteDatasets("delivered_orders"), "Pedidos",       false);
+  mkLineChart("chart-nd-pct",    siteDatasets("nd_pct"),           "% ND",          true);
+  mkLineChart("chart-lt",        siteDatasets("avg_lead_time"),    "Dias corridos", false);
+
+  const pick   = DATA.by_picking;
+  const pMonths = [...new Set(pick.map(r => r.month))].sort();
+  const pSites  = [...new Set(pick.map(r => r.site))].sort();
+
+  function buildPickSection(containerId, valueKey, yLabel, isPct) {
+    const container = document.getElementById(containerId);
+    pSites.forEach(site => {
+      const sd    = pick.filter(r => r.site === site);
+      const types = [...new Set(sd.map(r => r.picking_type))].sort();
+      const cid   = "chart-" + containerId + "-" + site;
+      const card  = document.createElement("div");
+      card.className = "chart-card";
+      card.innerHTML =
+        "<h3>" + site + "</h3>" +
+        '<p class="subtitle">Por método de envio (SHP_PICKING_TYPE_ID) · mês a mês</p>' +
+        '<canvas id="' + cid + '" class="tall"></canvas>';
+      container.appendChild(card);
+
+      const datasets = types.map((pt, i) => {
+        const vals = pMonths.map(m => {
+          const row = sd.find(x => x.month === m && x.picking_type === pt);
+          return row ? row[valueKey] : null;
+        });
+        const c = colorFor(i);
+        return {
+          label: pt, data: vals,
+          borderColor: c, backgroundColor: ax(c, 0.08),
+          borderWidth: 2, tension: 0.3, spanGaps: true,
+          pointRadius: 3, pointHoverRadius: 5
+        };
+      });
+
+      new Chart(document.getElementById(cid), {
+        type: "line",
+        data: { labels: pMonths, datasets: datasets },
+        options: {
+          responsive: true,
+          interaction: { mode:"index", intersect:false },
+          plugins: {
+            legend: { position:"top", labels:{ font:{ size:10 }, boxWidth:12 } },
+            tooltip: { callbacks: { label: ctx =>
+              " " + ctx.dataset.label + ": " + (isPct ? ctx.parsed.y+"%" : fmtN(ctx.parsed.y))
+            } }
+          },
+          scales: {
+            x: { ticks:{ maxRotation:45, font:{ size:10 } } },
+            y: { beginAtZero:true, title:{ display:true, text:yLabel, font:{ size:11 } } }
+          }
+        }
+      });
+    });
+  }
+
+  buildPickSection("section-lt-pick", "avg_lead_time", "Dias corridos", false);
+  buildPickSection("section-nd-pick", "nd_pct",        "% ND",          true);
+}
+
+// ── Init: Qualidade & SLA ────────────────────────────────────────────────────
+function initSLA() {
+  const top3     = DATA.top3_states;
+  const top3pick = DATA.top3_by_picking;
+  const pareto   = DATA.pareto_nd;
+
+  const slaSites = [...new Set(top3.map(r => r.site))].sort();
+
+  // ── Gráfico 1: Top 3 estados — volume (barras) + lead time (linha) ──────
+  slaSites.forEach(site => {
+    const sd  = top3.filter(r => r.site === site).sort((a,b) => a.rn - b.rn);
+    const labels  = sd.map(r => r.state);
+    const volumes = sd.map(r => r.total_orders);
+    const leads   = sd.map(r => r.avg_lead_time);
+    const c = SITE_COLOR[site] || colorFor(0);
+    const cid = "chart-top3-" + site;
+
+    const card = document.createElement("div");
+    card.className = "chart-card";
+    card.innerHTML =
+      "<h3>" + site + "</h3>" +
+      '<p class="subtitle">Top 3 estados por volume · lead time médio (eixo direito)</p>' +
+      '<canvas id="' + cid + '" class="tall"></canvas>';
+    document.getElementById("sec-sla-1-grid").appendChild(card);
+
+    new Chart(document.getElementById(cid), {
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            type: "bar",
+            label: "Pedidos",
+            data: volumes,
+            backgroundColor: ax(c, 0.70),
+            borderColor: c,
+            borderWidth: 1,
+            yAxisID: "y"
+          },
+          {
+            type: "line",
+            label: "Lead Time Médio (dias)",
+            data: leads,
+            borderColor: PALETTE[4],
+            backgroundColor: ax(PALETTE[4], 0.10),
+            borderWidth: 2,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            tension: 0,
+            yAxisID: "y2"
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        interaction: { mode:"index", intersect:false },
+        plugins: {
+          legend: { position:"top", labels:{ font:{ size:11 }, boxWidth:14 } },
+          tooltip: { callbacks: {
+            label: ctx => {
+              if (ctx.datasetIndex === 0) return " " + ctx.dataset.label + ": " + fmtN(ctx.parsed.y);
+              return " " + ctx.dataset.label + ": " + ctx.parsed.y + "d";
+            }
+          } }
+        },
+        scales: {
+          y:  { beginAtZero:true, title:{ display:true, text:"Pedidos",        font:{ size:11 } } },
+          y2: { position:"right", beginAtZero:true,
+                title:{ display:true, text:"Lead Time (dias)", font:{ size:11 } },
+                grid:{ drawOnChartArea:false } }
+        }
+      }
+    });
+  });
+
+  // ── Gráfico 2: Top 3 estados — lead time agrupado por método de envio ────
+  const p2Sites = [...new Set(top3pick.map(r => r.site))].sort();
+  p2Sites.forEach(site => {
+    const sd = top3pick.filter(r => r.site === site);
+
+    // Ordena os estados pelo volume total desc
+    const stateVol = {};
+    sd.forEach(r => { stateVol[r.state] = (stateVol[r.state]||0) + r.total_orders; });
+    const states = [...new Set(sd.map(r => r.state))].sort((a,b) => stateVol[b] - stateVol[a]);
+    const picks  = [...new Set(sd.map(r => r.picking_type))].sort();
+
+    const cid  = "chart-top3pick-" + site;
+    const card = document.createElement("div");
+    card.className = "chart-card";
+    card.innerHTML =
+      "<h3>" + site + "</h3>" +
+      '<p class="subtitle">Lead Time médio por método de envio · top 3 estados em volume</p>' +
+      '<canvas id="' + cid + '" class="tall"></canvas>';
+    document.getElementById("sec-sla-2-grid").appendChild(card);
+
+    const datasets = picks.map((pt, i) => {
+      const vals = states.map(state => {
+        const row = sd.find(r => r.state === state && r.picking_type === pt);
+        return row ? row.avg_lead_time : null;
+      });
+      const c = colorFor(i);
+      return {
+        label: pt, data: vals,
+        backgroundColor: ax(c, 0.72), borderColor: c, borderWidth: 1
+      };
+    });
+
+    new Chart(document.getElementById(cid), {
+      type: "bar",
+      data: { labels: states, datasets: datasets },
+      options: {
+        responsive: true,
+        interaction: { mode:"index", intersect:false },
+        plugins: {
+          legend: { position:"top", labels:{ font:{ size:10 }, boxWidth:12 } },
+          tooltip: { callbacks: {
+            afterLabel: ctx => {
+              const row = sd.find(r =>
+                r.state === states[ctx.dataIndex] && r.picking_type === picks[ctx.datasetIndex]);
+              return row ? "   Volume: " + fmtN(row.total_orders) + " pedidos" : "";
+            }
+          } }
+        },
+        scales: {
+          y: { beginAtZero:true, title:{ display:true, text:"Lead Time (dias)", font:{ size:11 } } }
+        }
+      }
+    });
+  });
+
+  // ── Gráfico 3: Pareto de motivos ND ──────────────────────────────────────
+  const p3Sites = [...new Set(pareto.map(r => r.site))].sort();
+  p3Sites.forEach(site => {
+    const sd = pareto.filter(r => r.site === site)
+                     .sort((a,b) => b.cnt - a.cnt)
+                     .slice(0, 15);   // top 15 motivos
+
+    // Acumulado %
+    let cum = 0;
+    const cumPcts = sd.map(r => { cum += r.pct; return Math.round(cum * 100) / 100; });
+
+    const cid  = "chart-pareto-" + site;
+    const card = document.createElement("div");
+    card.className = "chart-card";
+    card.innerHTML =
+      "<h3>" + site + "</h3>" +
+      '<p class="subtitle">MOTIVO_NO_ENTREGA_NAME_1 · pedidos not_delivered · % sobre total ND do site</p>' +
+      '<canvas id="' + cid + '" class="tall"></canvas>';
+    document.getElementById("sec-sla-3-grid").appendChild(card);
+
+    new Chart(document.getElementById(cid), {
+      data: {
+        labels: sd.map(r => r.motivo),
+        datasets: [
+          {
+            type: "bar",
+            label: "% ND",
+            data: sd.map(r => r.pct),
+            backgroundColor: ax(PALETTE[0], 0.70),
+            borderColor: PALETTE[0],
+            borderWidth: 1,
+            yAxisID: "y"
+          },
+          {
+            type: "line",
+            label: "Acumulado %",
+            data: cumPcts,
+            borderColor: PALETTE[4],
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            pointRadius: 3,
+            tension: 0.1,
+            yAxisID: "y2"
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        interaction: { mode:"index", intersect:false },
+        plugins: {
+          legend: { position:"top", labels:{ font:{ size:11 }, boxWidth:14 } },
+          tooltip: { callbacks: {
+            label: ctx => {
+              if (ctx.datasetIndex === 0) {
+                const row = sd[ctx.dataIndex];
+                return " % ND: " + ctx.parsed.y + "% (" + fmtN(row.cnt) + " pedidos)";
+              }
+              return " Acumulado: " + ctx.parsed.y + "%";
+            }
+          } }
+        },
+        scales: {
+          x: { ticks:{ maxRotation:55, font:{ size:9 } } },
+          y:  { beginAtZero:true,
+                title:{ display:true, text:"% do total ND", font:{ size:11 } } },
+          y2: { position:"right", min:0, max:100,
+                title:{ display:true, text:"Acumulado %", font:{ size:11 } },
+                grid:{ drawOnChartArea:false } }
+        }
+      }
+    });
+  });
+}
+
+// ── Mapa de funções de init por aba ──────────────────────────────────────────
+const INIT_FNS = { "tab-geral": initGeral, "tab-sla": initSLA };
+
+// Ativa a aba inicial
+showTab("tab-geral");
+</script>
+</body>
+</html>
