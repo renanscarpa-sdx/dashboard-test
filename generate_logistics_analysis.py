@@ -192,29 +192,32 @@ GROUP BY 1, 2, 3
 ORDER BY 1, 2, 3
 """
 
-# Gráfico 3 — Pareto de motivos de not_delivered — todos os países combinados
+# Gráfico 3 — Pareto de motivos de not_delivered — por país
 QUERY_PARETO_ND = f"""
 WITH {_BASE_CTE},
 counts AS (
   SELECT
+    site,
     motivo_nd                          AS motivo,
     COUNT(ORDER_SHIPPING_NUMBER)        AS cnt
   FROM all_orders
   WHERE FLAG_DELIVERED = 0
     AND motivo_nd IS NOT NULL
     AND TRIM(motivo_nd) != ''
-  GROUP BY 1
+  GROUP BY 1, 2
 ),
-total AS (
-  SELECT SUM(cnt) AS grand_total FROM counts
+totals AS (
+  SELECT site, SUM(cnt) AS site_total FROM counts GROUP BY 1
 )
 SELECT
+  c.site,
   c.motivo,
   c.cnt,
-  t.grand_total,
-  ROUND(SAFE_DIVIDE(c.cnt, t.grand_total) * 100, 2)  AS pct
-FROM counts c, total t
-ORDER BY c.cnt DESC
+  t.site_total,
+  ROUND(SAFE_DIVIDE(c.cnt, t.site_total) * 100, 2)  AS pct
+FROM counts c
+JOIN totals t ON c.site = t.site
+ORDER BY c.site, c.cnt DESC
 """
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -420,12 +423,12 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; backg
       <div class="chart-grid cols-2" id="sec-sla-2-grid"></div>
     </div>
 
-    <!-- Seção 3 — Pareto de motivos ND — todos os países -->
+    <!-- Seção 3 — Pareto de motivos ND — por país -->
     <div class="section">
       <div class="section-title">
-        <span class="section-num">3</span>Pareto de Motivos de Falha de Entrega — Todos os Países
+        <span class="section-num">3</span>Pareto de Motivos de Falha de Entrega — por País
       </div>
-      <div class="chart-grid cols-1" id="sec-sla-3-grid"></div>
+      <div class="chart-grid cols-2" id="sec-sla-3-grid"></div>
     </div>
 
   </div><!-- /tab-sla -->
@@ -708,70 +711,76 @@ function initSLA() {{
     }});
   }});
 
-  // ── Gráfico 3: Pareto de motivos ND — todos os países combinados ──────────
-  const rows = pareto.sort((a,b) => b.cnt - a.cnt).slice(0, 20);
+  // ── Gráfico 3: Pareto de motivos ND — um gráfico por país ───────────────
+  const p3Sites = [...new Set(pareto.map(r => r.site))].sort();
+  p3Sites.forEach(site => {{
+    const rows = pareto.filter(r => r.site === site)
+                       .sort((a,b) => b.cnt - a.cnt)
+                       .slice(0, 15);
 
-  let cum = 0;
-  const cumPcts = rows.map(r => {{ cum += r.pct; return Math.round(cum * 100) / 100; }});
+    let cum = 0;
+    const cumPcts = rows.map(r => {{ cum += r.pct; return Math.round(cum * 100) / 100; }});
 
-  const paretoCard = document.createElement("div");
-  paretoCard.className = "chart-card";
-  paretoCard.innerHTML =
-    "<h3>Pareto de Motivos — MLB · MLC · MLM · MLA · MLU</h3>" +
-    '<p class="subtitle">MOTIVO_NO_ENTREGA_NAME_1 · FLAG_DELIVERED = 0 · todos os países · top 20 motivos</p>' +
-    '<canvas id="chart-pareto-all" class="tall"></canvas>';
-  document.getElementById("sec-sla-3-grid").appendChild(paretoCard);
+    const cid  = "chart-pareto-" + site;
+    const card = document.createElement("div");
+    card.className = "chart-card";
+    card.innerHTML =
+      "<h3>" + site + "</h3>" +
+      '<p class="subtitle">MOTIVO_NO_ENTREGA_NAME_1 · FLAG_DELIVERED = 0 · top 15 motivos</p>' +
+      '<canvas id="' + cid + '" class="tall"></canvas>';
+    document.getElementById("sec-sla-3-grid").appendChild(card);
 
-  new Chart(document.getElementById("chart-pareto-all"), {{
-    data: {{
-      labels: rows.map(r => r.motivo),
-      datasets: [
-        {{
-          type: "bar",
-          label: "% ND",
-          data: rows.map(r => r.pct),
-          backgroundColor: ax(PALETTE[0], 0.70),
-          borderColor: PALETTE[0],
-          borderWidth: 1,
-          yAxisID: "y"
-        }},
-        {{
-          type: "line",
-          label: "Acumulado %",
-          data: cumPcts,
-          borderColor: PALETTE[4],
-          backgroundColor: "transparent",
-          borderWidth: 2,
-          pointRadius: 3,
-          tension: 0.1,
-          yAxisID: "y2"
-        }}
-      ]
-    }},
-    options: {{
-      responsive: true,
-      interaction: {{ mode:"index", intersect:false }},
-      plugins: {{
-        legend: {{ position:"top", labels:{{ font:{{ size:11 }}, boxWidth:14 }} }},
-        tooltip: {{ callbacks: {{
-          label: ctx => {{
-            if (ctx.datasetIndex === 0) {{
-              const row = rows[ctx.dataIndex];
-              return " % ND: " + ctx.parsed.y + "% (" + fmtN(row.cnt) + " pedidos)";
-            }}
-            return " Acumulado: " + ctx.parsed.y + "%";
+    new Chart(document.getElementById(cid), {{
+      data: {{
+        labels: rows.map(r => r.motivo),
+        datasets: [
+          {{
+            type: "bar",
+            label: "% ND",
+            data: rows.map(r => r.pct),
+            backgroundColor: ax(SITE_COLOR[site] || PALETTE[0], 0.70),
+            borderColor: SITE_COLOR[site] || PALETTE[0],
+            borderWidth: 1,
+            yAxisID: "y"
+          }},
+          {{
+            type: "line",
+            label: "Acumulado %",
+            data: cumPcts,
+            borderColor: PALETTE[4],
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            pointRadius: 3,
+            tension: 0.1,
+            yAxisID: "y2"
           }}
-        }} }}
+        ]
       }},
-      scales: {{
-        x: {{ ticks:{{ maxRotation:55, font:{{ size:9 }} }} }},
-        y:  {{ beginAtZero:true,
-              title:{{ display:true, text:"% do total ND", font:{{ size:11 }} }} }},
-        y2: {{ position:"right", min:0, max:100,
-              title:{{ display:true, text:"Acumulado %", font:{{ size:11 }} }},
-              grid:{{ drawOnChartArea:false }} }}
+      options: {{
+        responsive: true,
+        interaction: {{ mode:"index", intersect:false }},
+        plugins: {{
+          legend: {{ position:"top", labels:{{ font:{{ size:11 }}, boxWidth:14 }} }},
+          tooltip: {{ callbacks: {{
+            label: ctx => {{
+              if (ctx.datasetIndex === 0) {{
+                const row = rows[ctx.dataIndex];
+                return " % ND: " + ctx.parsed.y + "% (" + fmtN(row.cnt) + " pedidos)";
+              }}
+              return " Acumulado: " + ctx.parsed.y + "%";
+            }}
+          }} }}
+        }},
+        scales: {{
+          x: {{ ticks:{{ maxRotation:55, font:{{ size:9 }} }} }},
+          y:  {{ beginAtZero:true,
+                title:{{ display:true, text:"% do total ND", font:{{ size:11 }} }} }},
+          y2: {{ position:"right", min:0, max:100,
+                title:{{ display:true, text:"Acumulado %", font:{{ size:11 }} }},
+                grid:{{ drawOnChartArea:false }} }}
+        }}
       }}
-    }}
+    }});
   }});
 }}
 
