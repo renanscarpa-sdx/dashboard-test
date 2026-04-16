@@ -20,33 +20,37 @@ DEPENDÊNCIAS:
 from google.cloud import bigquery
 import pandas as pd
 import json
-from datetime import datetime
+import time
+from datetime import datetime, date
 
 # ── CONFIGURAÇÃO ──────────────────────────────────────────────────────────────
 
-PROJECT   = "meli-bi-data"
-DATE_FROM = "2025-01-01"
-DATE_TO   = "2026-04-10"
-OUTPUT    = "sdx_dashboard.html"
+PROJECT        = "meli-bi-data"
+DATE_FROM      = "2025-11-01"                        # gráficos: nov/2025 em diante
+DATE_TO        = date.today().strftime("%Y-%m-%d")   # sempre a data atual
+DATE_FROM_KPIS = "2026-01-01"                        # resumo executivo: apenas 2026
+OUTPUT         = "sdx_dashboard.html"
 
 TABLE_MLB   = "`meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS_MLB`"
 TABLE_MULTI = "`meli-bi-data.SBOX_OPER_MP.TBL_LK_SDX_BASE_ORDERS`"
 
 # ── CTE BASE — UNION MLB + multi-país ─────────────────────────────────────────
+# FLAG_DELIVERED: 1 = entregue, 0 = não entregue
 
-_BASE_CTE = f"""
+def make_base_cte(d_from: str, d_to: str) -> str:
+    return f"""
   all_orders AS (
     SELECT
       'MLB'                                                                AS site,
       ORDER_SHIPPING_NUMBER,
       DATE_CREATED,
       COALESCE(DATE_FIRST_VISIT, DATE_DELIVERED)                           AS delivery_date,
-      SHP_STATUS_TYPE,
+      FLAG_DELIVERED,
       COALESCE(NULLIF(TRIM(SHP_PICKING_TYPE_ID), ''), 'unknown')          AS picking_type,
       COALESCE(NULLIF(TRIM(SHP_ADD_STATE_ID), ''), 'unknown')             AS state,
-      COALESCE(NULLIF(TRIM(MOTIVO_NO_ENTREGA_NAME_1), ''), 'sem motivo')  AS motivo_nd
+      TRIM(UPPER(MOTIVO_NO_ENTREGA_NAME_1))                                AS motivo_nd
     FROM {TABLE_MLB}
-    WHERE DATE(DATE_CREATED) BETWEEN '{DATE_FROM}' AND '{DATE_TO}'
+    WHERE DATE(DATE_CREATED) BETWEEN '{d_from}' AND '{d_to}'
 
     UNION ALL
 
@@ -55,48 +59,55 @@ _BASE_CTE = f"""
       ORDER_SHIPPING_NUMBER,
       DATE_CREATED,
       COALESCE(DATE_FIRST_VISIT, DATE_DELIVERED)                           AS delivery_date,
-      SHP_STATUS_TYPE,
+      FLAG_DELIVERED,
       COALESCE(NULLIF(TRIM(SHP_PICKING_TYPE_ID), ''), 'unknown')          AS picking_type,
       COALESCE(NULLIF(TRIM(SHP_ADD_STATE_ID), ''), 'unknown')             AS state,
-      COALESCE(NULLIF(TRIM(MOTIVO_NO_ENTREGA_NAME_1), ''), 'sem motivo')  AS motivo_nd
+      TRIM(UPPER(MOTIVO_NO_ENTREGA_NAME_1))                                AS motivo_nd
     FROM {TABLE_MULTI}
-    WHERE DATE(DATE_CREATED) BETWEEN '{DATE_FROM}' AND '{DATE_TO}'
+    WHERE DATE(DATE_CREATED) BETWEEN '{d_from}' AND '{d_to}'
       AND SIT_SITE_ID IN ('MLC', 'MLM', 'MLA', 'MLU')
   )
 """
 
-# Fragmento reutilizável de lead time médio (sem alias de tabela)
+_BASE_CTE      = make_base_cte(DATE_FROM,      DATE_TO)
+_BASE_CTE_2026 = make_base_cte(DATE_FROM_KPIS, DATE_TO)
+
+# Fragmento reutilizável de lead time médio (FLAG_DELIVERED = 1)
 _LT_CASE = "DATE_DIFF(DATE(delivery_date), DATE(DATE_CREATED), DAY)"
 _LT_AVG  = f"""ROUND(AVG(
     CASE
-      WHEN delivery_date IS NOT NULL
+      WHEN FLAG_DELIVERED = 1
+       AND delivery_date IS NOT NULL
        AND {_LT_CASE} BETWEEN 1 AND 59
       THEN {_LT_CASE}
     END
   ), 2)"""
 
-# Lead time com alias qualificado para queries com JOIN
+# Lead time qualificado para queries com JOIN (alias all_orders)
 _LT_CASE_Q = "DATE_DIFF(DATE(all_orders.delivery_date), DATE(all_orders.DATE_CREATED), DAY)"
 _LT_AVG_Q  = f"""ROUND(AVG(
     CASE
-      WHEN all_orders.delivery_date IS NOT NULL
+      WHEN all_orders.FLAG_DELIVERED = 1
+       AND all_orders.delivery_date IS NOT NULL
        AND {_LT_CASE_Q} BETWEEN 1 AND 59
       THEN {_LT_CASE_Q}
     END
   ), 2)"""
 
-# ── QUERIES — Visão Geral ─────────────────────────────────────────────────────
+# ── QUERIES — Resumo Executivo (apenas 2026) ──────────────────────────────────
 
 QUERY_KPIS = f"""
-WITH {_BASE_CTE}
+WITH {_BASE_CTE_2026}
 SELECT
   COUNT(ORDER_SHIPPING_NUMBER)                                                                    AS total_sold,
-  COUNTIF(delivery_date IS NOT NULL)                                                              AS total_delivered,
-  COUNTIF(SHP_STATUS_TYPE = 'not_delivered')                                                      AS total_nd,
-  ROUND(SAFE_DIVIDE(COUNTIF(SHP_STATUS_TYPE = 'not_delivered'), COUNT(ORDER_SHIPPING_NUMBER)) * 100, 2) AS nd_pct,
+  COUNTIF(FLAG_DELIVERED = 1)                                                                     AS total_delivered,
+  COUNTIF(FLAG_DELIVERED = 0)                                                                     AS total_nd,
+  ROUND(SAFE_DIVIDE(COUNTIF(FLAG_DELIVERED = 0), COUNT(ORDER_SHIPPING_NUMBER)) * 100, 2)          AS nd_pct,
   {_LT_AVG}                                                                                       AS avg_lead_time
 FROM all_orders
 """
+
+# ── QUERIES — Visão Geral (nov/2025 até hoje) ─────────────────────────────────
 
 QUERY_BY_MONTH_COUNTRY = f"""
 WITH {_BASE_CTE}
@@ -104,9 +115,9 @@ SELECT
   FORMAT_DATE('%Y-%m', DATE(DATE_CREATED))                                                        AS month,
   site,
   COUNT(ORDER_SHIPPING_NUMBER)                                                                    AS sold_orders,
-  COUNTIF(delivery_date IS NOT NULL)                                                              AS delivered_orders,
-  COUNTIF(SHP_STATUS_TYPE = 'not_delivered')                                                      AS not_delivered,
-  ROUND(SAFE_DIVIDE(COUNTIF(SHP_STATUS_TYPE = 'not_delivered'), COUNT(ORDER_SHIPPING_NUMBER)) * 100, 2) AS nd_pct,
+  COUNTIF(FLAG_DELIVERED = 1)                                                                     AS delivered_orders,
+  COUNTIF(FLAG_DELIVERED = 0)                                                                     AS not_delivered,
+  ROUND(SAFE_DIVIDE(COUNTIF(FLAG_DELIVERED = 0), COUNT(ORDER_SHIPPING_NUMBER)) * 100, 2)          AS nd_pct,
   {_LT_AVG}                                                                                       AS avg_lead_time
 FROM all_orders
 GROUP BY 1, 2
@@ -120,15 +131,15 @@ SELECT
   site,
   picking_type,
   COUNT(ORDER_SHIPPING_NUMBER)                                                                    AS total_orders,
-  COUNTIF(SHP_STATUS_TYPE = 'not_delivered')                                                      AS not_delivered,
-  ROUND(SAFE_DIVIDE(COUNTIF(SHP_STATUS_TYPE = 'not_delivered'), COUNT(ORDER_SHIPPING_NUMBER)) * 100, 2) AS nd_pct,
+  COUNTIF(FLAG_DELIVERED = 0)                                                                     AS not_delivered,
+  ROUND(SAFE_DIVIDE(COUNTIF(FLAG_DELIVERED = 0), COUNT(ORDER_SHIPPING_NUMBER)) * 100, 2)          AS nd_pct,
   {_LT_AVG}                                                                                       AS avg_lead_time
 FROM all_orders
 GROUP BY 1, 2, 3
 ORDER BY 1, 2, 3
 """
 
-# ── QUERIES — Qualidade & SLA ─────────────────────────────────────────────────
+# ── QUERIES — Qualidade & SLA (nov/2025 até hoje) ────────────────────────────
 
 # Gráfico 1 — Top 3 estados por país: volume + lead time médio
 QUERY_TOP3_STATES = f"""
@@ -138,6 +149,7 @@ agg AS (
     site,
     state,
     COUNT(ORDER_SHIPPING_NUMBER)  AS total_orders,
+    COUNTIF(FLAG_DELIVERED = 0)   AS not_delivered,
     {_LT_AVG}                     AS avg_lead_time
   FROM all_orders
   GROUP BY 1, 2
@@ -146,14 +158,13 @@ ranked AS (
   SELECT *, ROW_NUMBER() OVER (PARTITION BY site ORDER BY total_orders DESC) AS rn
   FROM agg
 )
-SELECT site, state, total_orders, avg_lead_time, rn
+SELECT site, state, total_orders, not_delivered, avg_lead_time, rn
 FROM ranked
 WHERE rn <= 3
 ORDER BY site, rn
 """
 
-# Gráfico 2 — Top 3 estados por país com lead time médio aberto por método de envio
-# Nota: CTE renomeado para state_vol (evita conflito de nome com a coluna alias)
+# Gráfico 2 — Top 3 estados por país com lead time médio por método de envio
 QUERY_TOP3_BY_PICKING = f"""
 WITH {_BASE_CTE},
 state_vol AS (
@@ -171,6 +182,7 @@ SELECT
   all_orders.state,
   all_orders.picking_type,
   COUNT(all_orders.ORDER_SHIPPING_NUMBER)  AS total_orders,
+  COUNTIF(all_orders.FLAG_DELIVERED = 0)  AS not_delivered,
   {_LT_AVG_Q}                              AS avg_lead_time
 FROM all_orders
 INNER JOIN top3
@@ -180,44 +192,52 @@ GROUP BY 1, 2, 3
 ORDER BY 1, 2, 3
 """
 
-# Gráfico 3 — Pareto de motivos de not_delivered
+# Gráfico 3 — Pareto de motivos de not_delivered — todos os países combinados
 QUERY_PARETO_ND = f"""
 WITH {_BASE_CTE},
 counts AS (
   SELECT
-    site,
     motivo_nd                          AS motivo,
     COUNT(ORDER_SHIPPING_NUMBER)        AS cnt
   FROM all_orders
-  WHERE SHP_STATUS_TYPE = 'not_delivered'
-  GROUP BY 1, 2
+  WHERE FLAG_DELIVERED = 0
+    AND motivo_nd IS NOT NULL
+    AND TRIM(motivo_nd) != ''
+  GROUP BY 1
 ),
-totals AS (
-  SELECT site, SUM(cnt) AS total FROM counts GROUP BY 1
+total AS (
+  SELECT SUM(cnt) AS grand_total FROM counts
 )
 SELECT
-  c.site,
   c.motivo,
   c.cnt,
-  t.total                                              AS site_total,
-  ROUND(SAFE_DIVIDE(c.cnt, t.total) * 100, 2)          AS pct
-FROM counts c
-JOIN totals t ON c.site = t.site
-ORDER BY c.site, c.cnt DESC
+  t.grand_total,
+  ROUND(SAFE_DIVIDE(c.cnt, t.grand_total) * 100, 2)  AS pct
+FROM counts c, total t
+ORDER BY c.cnt DESC
 """
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
-def run_query(client: bigquery.Client, sql: str, label: str) -> pd.DataFrame:
-    print(f"  [{label}] executando...")
-    df = client.query(sql).to_dataframe()
-    for col in df.select_dtypes(include=["object"]).columns:
+def run_query(client: bigquery.Client, sql: str, label: str, max_retries: int = 5) -> pd.DataFrame:
+    for attempt in range(max_retries):
         try:
-            df[col] = pd.to_numeric(df[col])
-        except (ValueError, TypeError):
-            pass
-    print(f"  [{label}] {len(df)} linhas")
-    return df
+            print(f"  [{label}] executando...")
+            df = client.query(sql).to_dataframe()
+            for col in df.select_dtypes(include=["object"]).columns:
+                try:
+                    df[col] = pd.to_numeric(df[col])
+                except (ValueError, TypeError):
+                    pass
+            print(f"  [{label}] {len(df)} linhas")
+            return df
+        except Exception as e:
+            if "quotaExceeded" in str(e) and attempt < max_retries - 1:
+                wait = (attempt + 1) * 20
+                print(f"  [{label}] quota excedida, aguardando {wait}s (tentativa {attempt+1}/{max_retries})...")
+                time.sleep(wait)
+            else:
+                raise
 
 
 def df_to_records(df: pd.DataFrame) -> list:
@@ -301,7 +321,7 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; backg
 <div class="header">
   <div>
     <h1>Dashboard Iniciativas SDX</h1>
-    <p>Período: {date_from} a {date_to} &nbsp;·&nbsp; Sites: MLB · MLC · MLM · MLA · MLU</p>
+    <p>Gráficos: {date_from} a {date_to} &nbsp;·&nbsp; KPIs: 2026 &nbsp;·&nbsp; Sites: MLB · MLC · MLM · MLA · MLU</p>
   </div>
   <span class="badge">Gerado em: {updated_at}</span>
 </div>
@@ -315,8 +335,11 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; backg
 
 <div class="content">
 
-  <!-- KPIs — sempre visíveis -->
+  <!-- KPIs — sempre visíveis (dados 2026) -->
   <div id="sec-kpis" style="padding-top:28px;">
+    <div style="font-size:.72rem;color:var(--muted);margin-bottom:8px;font-style:italic;">
+      Resumo executivo — dados de 2026 até {date_to}
+    </div>
     <div class="kpi-grid" id="kpi-grid"></div>
   </div>
 
@@ -334,7 +357,7 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; backg
         </div>
         <div class="chart-card">
           <h3>Pedidos Entregues por Mês</h3>
-          <p class="subtitle">Pedidos com COALESCE(DATE_FIRST_VISIT, DATE_DELIVERED) preenchida</p>
+          <p class="subtitle">FLAG_DELIVERED = 1 · por mês e site</p>
           <canvas id="chart-delivered" class="tall"></canvas>
         </div>
       </div>
@@ -346,7 +369,7 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; backg
       <div class="chart-grid cols-1">
         <div class="chart-card">
           <h3>% Not Delivered por Mês e País</h3>
-          <p class="subtitle">SHP_STATUS_TYPE = 'not_delivered' / COUNT(ORDER_SHIPPING_NUMBER)</p>
+          <p class="subtitle">FLAG_DELIVERED = 0 / COUNT(ORDER_SHIPPING_NUMBER)</p>
           <canvas id="chart-nd-pct" class="tall"></canvas>
         </div>
       </div>
@@ -358,7 +381,7 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; backg
       <div class="chart-grid cols-1">
         <div class="chart-card">
           <h3>Lead Time Médio por Mês e País</h3>
-          <p class="subtitle">DATE_DIFF(COALESCE(DATE_FIRST_VISIT, DATE_DELIVERED), DATE_CREATED, DAY)</p>
+          <p class="subtitle">DATE_DIFF(COALESCE(DATE_FIRST_VISIT, DATE_DELIVERED), DATE_CREATED, DAY) · FLAG_DELIVERED = 1</p>
           <canvas id="chart-lt" class="tall"></canvas>
         </div>
       </div>
@@ -397,12 +420,12 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; backg
       <div class="chart-grid cols-2" id="sec-sla-2-grid"></div>
     </div>
 
-    <!-- Seção 3 — Pareto de motivos ND -->
+    <!-- Seção 3 — Pareto de motivos ND — todos os países -->
     <div class="section">
       <div class="section-title">
-        <span class="section-num">3</span>Pareto de Motivos de Falha de Entrega (Not Delivered) por País
+        <span class="section-num">3</span>Pareto de Motivos de Falha de Entrega — Todos os Países
       </div>
-      <div class="chart-grid cols-2" id="sec-sla-3-grid"></div>
+      <div class="chart-grid cols-1" id="sec-sla-3-grid"></div>
     </div>
 
   </div><!-- /tab-sla -->
@@ -445,13 +468,13 @@ function showTab(id) {{
   if (!INITED[id]) {{ INITED[id] = true; INIT_FNS[id](); }}
 }}
 
-// ── KPIs ─────────────────────────────────────────────────────────────────────
+// ── KPIs (dados 2026) ────────────────────────────────────────────────────────
 const kpis = DATA.kpis;
 document.getElementById("kpi-grid").innerHTML = [
-  {{ cls:"c-blue",   lbl:"Pedidos Vendidos",  val:fmtN(kpis.total_sold),          sub:"Todos os países · período completo" }},
-  {{ cls:"c-green",  lbl:"Pedidos Entregues", val:fmtN(kpis.total_delivered),     sub:"Com data de entrega registrada" }},
+  {{ cls:"c-blue",   lbl:"Pedidos Vendidos",  val:fmtN(kpis.total_sold),          sub:"Todos os países · 2026" }},
+  {{ cls:"c-green",  lbl:"Pedidos Entregues", val:fmtN(kpis.total_delivered),     sub:"FLAG_DELIVERED = 1" }},
   {{ cls:"c-red",    lbl:"Not Delivered",      val:(kpis.nd_pct||0)+"%",           sub:fmtN(kpis.total_nd)+" pedidos" }},
-  {{ cls:"c-orange", lbl:"Lead Time Médio",    val:(kpis.avg_lead_time||"—")+"d", sub:"Dias corridos · todos os países" }},
+  {{ cls:"c-orange", lbl:"Lead Time Médio",    val:(kpis.avg_lead_time||"—")+"d", sub:"Dias corridos · entregues" }},
 ].map(k =>
   '<div class="kpi ' + k.cls + '">' +
   '<div class="lbl">' + k.lbl + '</div>' +
@@ -460,6 +483,9 @@ document.getElementById("kpi-grid").innerHTML = [
 ).join("");
 
 // ── Helpers de gráfico de linhas ─────────────────────────────────────────────
+DATA._months = [...new Set(DATA.by_month_country.map(r => r.month))].sort();
+DATA._sites  = [...new Set(DATA.by_month_country.map(r => r.site))].sort();
+
 function mkLineChart(id, datasets, yLabel, isPct) {{
   new Chart(document.getElementById(id), {{
     type: "line",
@@ -497,10 +523,6 @@ function siteDatasets(key) {{
   }});
 }}
 
-// ── Pré-calcula listas globais ───────────────────────────────────────────────
-DATA._months = [...new Set(DATA.by_month_country.map(r => r.month))].sort();
-DATA._sites  = [...new Set(DATA.by_month_country.map(r => r.site))].sort();
-
 // ── Init: Visão Geral ────────────────────────────────────────────────────────
 function initGeral() {{
   mkLineChart("chart-sold",      siteDatasets("sold_orders"),      "Pedidos",       false);
@@ -508,7 +530,7 @@ function initGeral() {{
   mkLineChart("chart-nd-pct",    siteDatasets("nd_pct"),           "% ND",          true);
   mkLineChart("chart-lt",        siteDatasets("avg_lead_time"),    "Dias corridos", false);
 
-  const pick   = DATA.by_picking;
+  const pick    = DATA.by_picking;
   const pMonths = [...new Set(pick.map(r => r.month))].sort();
   const pSites  = [...new Set(pick.map(r => r.site))].sort();
 
@@ -575,7 +597,7 @@ function initSLA() {{
 
   // ── Gráfico 1: Top 3 estados — volume (barras) + lead time (linha) ──────
   slaSites.forEach(site => {{
-    const sd  = top3.filter(r => r.site === site).sort((a,b) => a.rn - b.rn);
+    const sd      = top3.filter(r => r.site === site).sort((a,b) => a.rn - b.rn);
     const labels  = sd.map(r => r.state);
     const volumes = sd.map(r => r.total_orders);
     const leads   = sd.map(r => r.avg_lead_time);
@@ -639,12 +661,10 @@ function initSLA() {{
     }});
   }});
 
-  // ── Gráfico 2: Top 3 estados — lead time agrupado por método de envio ────
+  // ── Gráfico 2: Top 3 estados — lead time por método de envio ─────────────
   const p2Sites = [...new Set(top3pick.map(r => r.site))].sort();
   p2Sites.forEach(site => {{
     const sd = top3pick.filter(r => r.site === site);
-
-    // Ordena os estados pelo volume total desc
     const stateVol = {{}};
     sd.forEach(r => {{ stateVol[r.state] = (stateVol[r.state]||0) + r.total_orders; }});
     const states = [...new Set(sd.map(r => r.state))].sort((a,b) => stateVol[b] - stateVol[a]);
@@ -665,15 +685,12 @@ function initSLA() {{
         return row ? row.avg_lead_time : null;
       }});
       const c = colorFor(i);
-      return {{
-        label: pt, data: vals,
-        backgroundColor: ax(c, 0.72), borderColor: c, borderWidth: 1
-      }};
+      return {{ label:pt, data:vals, backgroundColor:ax(c,0.72), borderColor:c, borderWidth:1 }};
     }});
 
     new Chart(document.getElementById(cid), {{
       type: "bar",
-      data: {{ labels: states, datasets: datasets }},
+      data: {{ labels:states, datasets:datasets }},
       options: {{
         responsive: true,
         interaction: {{ mode:"index", intersect:false }},
@@ -681,90 +698,80 @@ function initSLA() {{
           legend: {{ position:"top", labels:{{ font:{{ size:10 }}, boxWidth:12 }} }},
           tooltip: {{ callbacks: {{
             afterLabel: ctx => {{
-              const row = sd.find(r =>
-                r.state === states[ctx.dataIndex] && r.picking_type === picks[ctx.datasetIndex]);
+              const row = sd.find(r => r.state===states[ctx.dataIndex] && r.picking_type===picks[ctx.datasetIndex]);
               return row ? "   Volume: " + fmtN(row.total_orders) + " pedidos" : "";
             }}
           }} }}
         }},
-        scales: {{
-          y: {{ beginAtZero:true, title:{{ display:true, text:"Lead Time (dias)", font:{{ size:11 }} }} }}
-        }}
+        scales: {{ y: {{ beginAtZero:true, title:{{ display:true, text:"Lead Time (dias)", font:{{ size:11 }} }} }} }}
       }}
     }});
   }});
 
-  // ── Gráfico 3: Pareto de motivos ND ──────────────────────────────────────
-  const p3Sites = [...new Set(pareto.map(r => r.site))].sort();
-  p3Sites.forEach(site => {{
-    const sd = pareto.filter(r => r.site === site)
-                     .sort((a,b) => b.cnt - a.cnt)
-                     .slice(0, 15);   // top 15 motivos
+  // ── Gráfico 3: Pareto de motivos ND — todos os países combinados ──────────
+  const rows = pareto.sort((a,b) => b.cnt - a.cnt).slice(0, 20);
 
-    // Acumulado %
-    let cum = 0;
-    const cumPcts = sd.map(r => {{ cum += r.pct; return Math.round(cum * 100) / 100; }});
+  let cum = 0;
+  const cumPcts = rows.map(r => {{ cum += r.pct; return Math.round(cum * 100) / 100; }});
 
-    const cid  = "chart-pareto-" + site;
-    const card = document.createElement("div");
-    card.className = "chart-card";
-    card.innerHTML =
-      "<h3>" + site + "</h3>" +
-      '<p class="subtitle">MOTIVO_NO_ENTREGA_NAME_1 · pedidos not_delivered · % sobre total ND do site</p>' +
-      '<canvas id="' + cid + '" class="tall"></canvas>';
-    document.getElementById("sec-sla-3-grid").appendChild(card);
+  const paretoCard = document.createElement("div");
+  paretoCard.className = "chart-card";
+  paretoCard.innerHTML =
+    "<h3>Pareto de Motivos — MLB · MLC · MLM · MLA · MLU</h3>" +
+    '<p class="subtitle">MOTIVO_NO_ENTREGA_NAME_1 · FLAG_DELIVERED = 0 · todos os países · top 20 motivos</p>' +
+    '<canvas id="chart-pareto-all" class="tall"></canvas>';
+  document.getElementById("sec-sla-3-grid").appendChild(paretoCard);
 
-    new Chart(document.getElementById(cid), {{
-      data: {{
-        labels: sd.map(r => r.motivo),
-        datasets: [
-          {{
-            type: "bar",
-            label: "% ND",
-            data: sd.map(r => r.pct),
-            backgroundColor: ax(PALETTE[0], 0.70),
-            borderColor: PALETTE[0],
-            borderWidth: 1,
-            yAxisID: "y"
-          }},
-          {{
-            type: "line",
-            label: "Acumulado %",
-            data: cumPcts,
-            borderColor: PALETTE[4],
-            backgroundColor: "transparent",
-            borderWidth: 2,
-            pointRadius: 3,
-            tension: 0.1,
-            yAxisID: "y2"
-          }}
-        ]
-      }},
-      options: {{
-        responsive: true,
-        interaction: {{ mode:"index", intersect:false }},
-        plugins: {{
-          legend: {{ position:"top", labels:{{ font:{{ size:11 }}, boxWidth:14 }} }},
-          tooltip: {{ callbacks: {{
-            label: ctx => {{
-              if (ctx.datasetIndex === 0) {{
-                const row = sd[ctx.dataIndex];
-                return " % ND: " + ctx.parsed.y + "% (" + fmtN(row.cnt) + " pedidos)";
-              }}
-              return " Acumulado: " + ctx.parsed.y + "%";
-            }}
-          }} }}
+  new Chart(document.getElementById("chart-pareto-all"), {{
+    data: {{
+      labels: rows.map(r => r.motivo),
+      datasets: [
+        {{
+          type: "bar",
+          label: "% ND",
+          data: rows.map(r => r.pct),
+          backgroundColor: ax(PALETTE[0], 0.70),
+          borderColor: PALETTE[0],
+          borderWidth: 1,
+          yAxisID: "y"
         }},
-        scales: {{
-          x: {{ ticks:{{ maxRotation:55, font:{{ size:9 }} }} }},
-          y:  {{ beginAtZero:true,
-                title:{{ display:true, text:"% do total ND", font:{{ size:11 }} }} }},
-          y2: {{ position:"right", min:0, max:100,
-                title:{{ display:true, text:"Acumulado %", font:{{ size:11 }} }},
-                grid:{{ drawOnChartArea:false }} }}
+        {{
+          type: "line",
+          label: "Acumulado %",
+          data: cumPcts,
+          borderColor: PALETTE[4],
+          backgroundColor: "transparent",
+          borderWidth: 2,
+          pointRadius: 3,
+          tension: 0.1,
+          yAxisID: "y2"
         }}
+      ]
+    }},
+    options: {{
+      responsive: true,
+      interaction: {{ mode:"index", intersect:false }},
+      plugins: {{
+        legend: {{ position:"top", labels:{{ font:{{ size:11 }}, boxWidth:14 }} }},
+        tooltip: {{ callbacks: {{
+          label: ctx => {{
+            if (ctx.datasetIndex === 0) {{
+              const row = rows[ctx.dataIndex];
+              return " % ND: " + ctx.parsed.y + "% (" + fmtN(row.cnt) + " pedidos)";
+            }}
+            return " Acumulado: " + ctx.parsed.y + "%";
+          }}
+        }} }}
+      }},
+      scales: {{
+        x: {{ ticks:{{ maxRotation:55, font:{{ size:9 }} }} }},
+        y:  {{ beginAtZero:true,
+              title:{{ display:true, text:"% do total ND", font:{{ size:11 }} }} }},
+        y2: {{ position:"right", min:0, max:100,
+              title:{{ display:true, text:"Acumulado %", font:{{ size:11 }} }},
+              grid:{{ drawOnChartArea:false }} }}
       }}
-    }});
+    }}
   }});
 }}
 
@@ -811,13 +818,16 @@ def main():
     print(f"Conectando ao BigQuery ({PROJECT})...")
     client = bigquery.Client(project=PROJECT)
 
+    print(f"\nPeriodo graficos : {DATE_FROM} - {DATE_TO}")
+    print(f"Periodo KPIs     : {DATE_FROM_KPIS} - {DATE_TO}")
+
     print("\nExecutando queries...")
-    df_kpis        = run_query(client, QUERY_KPIS,             "kpis")
-    df_monthly     = run_query(client, QUERY_BY_MONTH_COUNTRY, "monthly")
-    df_picking     = run_query(client, QUERY_BY_PICKING,       "picking")
-    df_top3        = run_query(client, QUERY_TOP3_STATES,      "top3-states")
-    df_top3pick    = run_query(client, QUERY_TOP3_BY_PICKING,  "top3-picking")
-    df_pareto      = run_query(client, QUERY_PARETO_ND,        "pareto-nd")
+    df_kpis     = run_query(client, QUERY_KPIS,             "kpis")
+    df_monthly  = run_query(client, QUERY_BY_MONTH_COUNTRY, "monthly")
+    df_picking  = run_query(client, QUERY_BY_PICKING,       "picking")
+    df_top3     = run_query(client, QUERY_TOP3_STATES,      "top3-states")
+    df_top3pick = run_query(client, QUERY_TOP3_BY_PICKING,  "top3-picking")
+    df_pareto   = run_query(client, QUERY_PARETO_ND,        "pareto-nd")
 
     kpis = df_kpis.iloc[0].to_dict() if len(df_kpis) > 0 else {}
 
