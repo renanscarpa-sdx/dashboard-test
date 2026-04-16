@@ -220,6 +220,53 @@ JOIN totals t ON c.site = t.site
 ORDER BY c.site, c.cnt DESC
 """
 
+# Gráfico 6 — Performance por Produto: volume, ND% e Lead Time por mês e país
+QUERY_BY_PRODUCT = f"""
+WITH all_orders_prod AS (
+  SELECT
+    FORMAT_DATE('%Y-%m', DATE(DATE_CREATED))                                AS month,
+    'MLB'                                                                    AS site,
+    COALESCE(NULLIF(TRIM(PRODUCTO), ''), 'Desconhecido')                    AS producto,
+    FLAG_DELIVERED,
+    DATE_DIFF(
+      DATE(COALESCE(DATE_FIRST_VISIT, DATE_DELIVERED)),
+      DATE(DATE_CREATED),
+      DAY
+    )                                                                        AS lt
+  FROM {TABLE_MLB}
+  WHERE DATE(DATE_CREATED) BETWEEN '{DATE_FROM}' AND '{DATE_TO}'
+
+  UNION ALL
+
+  SELECT
+    FORMAT_DATE('%Y-%m', DATE(DATE_CREATED)),
+    SIT_SITE_ID,
+    COALESCE(NULLIF(TRIM(PRODUCTO), ''), 'Desconhecido'),
+    FLAG_DELIVERED,
+    DATE_DIFF(
+      DATE(COALESCE(DATE_FIRST_VISIT, DATE_DELIVERED)),
+      DATE(DATE_CREATED),
+      DAY
+    )
+  FROM {TABLE_MULTI}
+  WHERE DATE(DATE_CREATED) BETWEEN '{DATE_FROM}' AND '{DATE_TO}'
+    AND SIT_SITE_ID IN ('MLC', 'MLM', 'MLA', 'MLU')
+)
+SELECT
+  month,
+  site,
+  producto,
+  COUNT(*)                                                                   AS sold_orders,
+  COUNTIF(FLAG_DELIVERED = 0)                                                AS not_delivered,
+  ROUND(SAFE_DIVIDE(COUNTIF(FLAG_DELIVERED = 0), COUNT(*)) * 100, 2)        AS nd_pct,
+  ROUND(AVG(
+    CASE WHEN FLAG_DELIVERED = 1 AND lt BETWEEN 1 AND 59 THEN lt END
+  ), 2)                                                                      AS avg_lead_time
+FROM all_orders_prod
+GROUP BY 1, 2, 3
+ORDER BY 1, 2, 3
+"""
+
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
 def run_query(client: bigquery.Client, sql: str, label: str, max_retries: int = 5) -> pd.DataFrame:
@@ -317,6 +364,13 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; backg
 .chart-card canvas.tall{{ max-height:380px; }}
 
 .footer{{ text-align:center; padding:20px; font-size:.71rem; color:var(--muted); margin-top:20px; }}
+
+.filter-bar{{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }}
+.filter-bar label{{ font-size:.78rem; color:var(--muted); white-space:nowrap; font-weight:600; }}
+.filter-bar select{{ font-size:.78rem; padding:6px 10px; border:1px solid var(--border);
+                     border-radius:6px; background:#fff; color:var(--text); cursor:pointer;
+                     min-width:220px; outline:none; }}
+.filter-bar select:focus{{ border-color:var(--blue); }}
 </style>
 </head>
 <body>
@@ -400,6 +454,36 @@ body{{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; backg
     <div class="section">
       <div class="section-title"><span class="section-num">5</span>% Not Delivered por Método de Envio por Mês — por País</div>
       <div class="chart-grid cols-2" id="section-nd-pick"></div>
+    </div>
+
+    <!-- Seção 6 — Performance por Produto -->
+    <div class="section">
+      <div class="section-title"><span class="section-num">6</span>Performance por Produto</div>
+      <div class="filter-bar">
+        <label for="prod-filter">Produto:</label>
+        <select id="prod-filter" onchange="onProdChange()">
+          <option value="__all__">Todos os produtos</option>
+        </select>
+      </div>
+      <div class="chart-grid cols-1" style="margin-bottom:16px;">
+        <div class="chart-card">
+          <h3 id="prod-vol-h">Pedidos Vendidos por Mês — Todos os Produtos</h3>
+          <p class="subtitle">Por país · filtrado pelo produto selecionado</p>
+          <canvas id="chart-prod-vol" class="tall"></canvas>
+        </div>
+      </div>
+      <div class="chart-grid cols-2">
+        <div class="chart-card">
+          <h3 id="prod-nd-h">% Not Delivered — Todos os Produtos</h3>
+          <p class="subtitle">Por país · mês a mês</p>
+          <canvas id="chart-prod-nd" class="tall"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3 id="prod-lt-h">Lead Time Médio — Todos os Produtos</h3>
+          <p class="subtitle">Dias corridos · FLAG_DELIVERED = 1 · por país</p>
+          <canvas id="chart-prod-lt" class="tall"></canvas>
+        </div>
+      </div>
     </div>
 
   </div><!-- /tab-geral -->
@@ -588,6 +672,22 @@ function initGeral() {{
 
   buildPickSection("section-lt-pick", "avg_lead_time", "Dias corridos", false);
   buildPickSection("section-nd-pick", "nd_pct",        "% ND",          true);
+
+  // ── Seção 6 — Performance por Produto ─────────────────────────────────────
+  (function initProductSection() {{
+    const byProd = DATA.by_month_product || [];
+    if (!byProd.length) return;
+
+    const sel = document.getElementById("prod-filter");
+    const produtos = [...new Set(byProd.map(r => r.producto))].sort();
+    produtos.forEach(p => {{
+      const o = document.createElement("option");
+      o.value = p; o.textContent = p;
+      sel.appendChild(o);
+    }});
+
+    renderProdCharts("__all__");
+  }})();
 }}
 
 // ── Init: Qualidade & SLA ────────────────────────────────────────────────────
@@ -784,6 +884,70 @@ function initSLA() {{
   }});
 }}
 
+// ── Seção 6 — Filtro de Produto ───────────────────────────────────────────────
+const _prodCharts = {{}};
+
+function onProdChange() {{
+  renderProdCharts(document.getElementById("prod-filter").value);
+}}
+
+function renderProdCharts(prod) {{
+  const label = prod === "__all__" ? "Todos os Produtos" : prod;
+  document.getElementById("prod-vol-h").textContent = "Pedidos Vendidos por Mês — " + label;
+  document.getElementById("prod-nd-h" ).textContent = "% Not Delivered — " + label;
+  document.getElementById("prod-lt-h" ).textContent = "Lead Time Médio — " + label;
+
+  const months = DATA._months;
+  const rows   = prod === "__all__"
+    ? DATA.by_month_country
+    : (DATA.by_month_product || []).filter(r => r.producto === prod);
+  const sites  = prod === "__all__"
+    ? DATA._sites
+    : [...new Set(rows.map(r => r.site))].sort();
+
+  function mkDs(key, isPct) {{
+    return sites.map((site, i) => {{
+      const c = SITE_COLOR[site] || colorFor(i);
+      const vals = months.map(m => {{
+        const r = rows.find(x => x.month === m && x.site === site);
+        return r != null ? r[key] : null;
+      }});
+      return {{
+        label: site, data: vals,
+        borderColor: c, backgroundColor: ax(c, 0.08),
+        borderWidth: 2, tension: 0.3, spanGaps: true,
+        pointRadius: 3, pointHoverRadius: 5
+      }};
+    }});
+  }}
+
+  function rebuildChart(id, datasets, yLabel, isPct) {{
+    if (_prodCharts[id]) {{ _prodCharts[id].destroy(); delete _prodCharts[id]; }}
+    _prodCharts[id] = new Chart(document.getElementById(id), {{
+      type: "line",
+      data: {{ labels: months, datasets: datasets }},
+      options: {{
+        responsive: true,
+        interaction: {{ mode:"index", intersect:false }},
+        plugins: {{
+          legend: {{ position:"top", labels:{{ font:{{ size:11 }}, boxWidth:14 }} }},
+          tooltip: {{ callbacks: {{ label: ctx =>
+            " " + ctx.dataset.label + ": " + (isPct ? ctx.parsed.y+"%" : fmtN(ctx.parsed.y))
+          }} }}
+        }},
+        scales: {{
+          x: {{ ticks:{{ maxRotation:45, font:{{ size:10 }} }} }},
+          y: {{ beginAtZero:true, title:{{ display:true, text:yLabel, font:{{ size:11 }} }} }}
+        }}
+      }}
+    }});
+  }}
+
+  rebuildChart("chart-prod-vol", mkDs("sold_orders",   false), "Pedidos",       false);
+  rebuildChart("chart-prod-nd",  mkDs("nd_pct",        true),  "% ND",          true);
+  rebuildChart("chart-prod-lt",  mkDs("avg_lead_time", false), "Dias corridos", false);
+}}
+
 // ── Mapa de funções de init por aba ──────────────────────────────────────────
 const INIT_FNS = {{ "tab-geral": initGeral, "tab-sla": initSLA }};
 
@@ -799,14 +963,16 @@ showTab("tab-geral");
 
 def generate_html(kpis: dict, by_month_country: list, by_picking: list,
                   top3_states: list, top3_by_picking: list, pareto_nd: list,
+                  by_month_product: list,
                   output: str):
     payload = {
-        "kpis":             kpis,
-        "by_month_country": by_month_country,
-        "by_picking":       by_picking,
-        "top3_states":      top3_states,
-        "top3_by_picking":  top3_by_picking,
-        "pareto_nd":        pareto_nd,
+        "kpis":               kpis,
+        "by_month_country":   by_month_country,
+        "by_picking":         by_picking,
+        "top3_states":        top3_states,
+        "top3_by_picking":    top3_by_picking,
+        "pareto_nd":          pareto_nd,
+        "by_month_product":   by_month_product,
     }
     data_json = json.dumps(payload, ensure_ascii=False, default=str)
     now = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -837,6 +1003,7 @@ def main():
     df_top3     = run_query(client, QUERY_TOP3_STATES,      "top3-states")
     df_top3pick = run_query(client, QUERY_TOP3_BY_PICKING,  "top3-picking")
     df_pareto   = run_query(client, QUERY_PARETO_ND,        "pareto-nd")
+    df_product  = run_query(client, QUERY_BY_PRODUCT,       "by-product")
 
     kpis = df_kpis.iloc[0].to_dict() if len(df_kpis) > 0 else {}
 
@@ -848,6 +1015,7 @@ def main():
         top3_states=df_to_records(df_top3),
         top3_by_picking=df_to_records(df_top3pick),
         pareto_nd=df_to_records(df_pareto),
+        by_month_product=df_to_records(df_product),
         output=OUTPUT,
     )
 
